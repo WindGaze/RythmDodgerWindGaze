@@ -25,6 +25,7 @@
     padding: 30px 50px;
     border-radius: 10px;
     border: 2px solid #00ddff;
+    max-width: 400px;
   }
   #loading h2 {
     margin: 0 0 15px 0;
@@ -49,6 +50,25 @@
     color: #aaa;
     margin-top: 10px;
   }
+  #fileUpload {
+    margin-top: 20px;
+    padding: 10px;
+    background: #1a1a1a;
+    border: 2px dashed #00ddff;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  #fileUpload:hover {
+    background: #252525;
+  }
+  input[type="file"] {
+    display: none;
+  }
+  .upload-label {
+    cursor: pointer;
+    color: #00ddff;
+    text-decoration: underline;
+  }
 </style>
 </head>
 <body>
@@ -58,15 +78,20 @@
   <div id="progress">
     <div id="progress-bar"></div>
   </div>
-  <div class="status" id="status">Loading song....</div>
+  <div class="status" id="status">Initializing...</div>
+  <div id="fileUpload">
+    <label for="songFile" class="upload-label">
+      📁 Click here to upload your own song<br>
+      <span style="font-size: 12px; color: #888;">(or place song.mp3 in the same folder)</span>
+    </label>
+    <input type="file" id="songFile" accept="audio/*">
+  </div>
   <div style="font-size: 12px; color: #666; margin-top: 15px;">
     Please be patient
   </div>
 </div>
 
-<audio id="music" preload="auto" crossorigin="anonymous">
-  <source src="song.mp3" type="audio/mpeg">
-</audio>
+<audio id="music" preload="auto"></audio>
 <canvas id="game" width="600" height="800"></canvas>
 
 <script>
@@ -77,6 +102,7 @@ const audio = document.getElementById("music");
 const loadingDiv = document.getElementById("loading");
 const statusDiv = document.getElementById("status");
 const progressBar = document.getElementById("progress-bar");
+const fileInput = document.getElementById("songFile");
 
 /* ================= SETTINGS ================= */
 const BLOCK_SPEED = 9;
@@ -112,6 +138,8 @@ let scheduledBeats = new Set();
 let laneReservations = Array(LANE_COUNT).fill(0);
 let beatPulse = 0;
 
+let audioBlob = null; // Store the audio source
+
 /* ================= PLAYER ================= */
 const player = {
   x: PLATFORM_X + PLATFORM_WIDTH / 2,
@@ -129,23 +157,53 @@ const player = {
 };
 const HIT_Y = PLATFORM_Y;
 
+/* ================= FILE UPLOAD HANDLER ================= */
+fileInput.addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (file) {
+    audioBlob = file;
+    statusDiv.textContent = `Selected: ${file.name}`;
+    progressBar.style.width = "5%";
+    analyzeBeat();
+  }
+});
+
 /* ================= BEAT DETECTION ================= */
 async function analyzeBeat() {
-  
   try {
-    statusDiv.textContent = "Loading song.mp3...";
+    // Try to load song.mp3 first if no file uploaded
+    if (!audioBlob) {
+      statusDiv.textContent = "Checking for song.mp3...";
+      progressBar.style.width = "5%";
+      
+      try {
+        const response = await fetch('song.mp3');
+        if (!response.ok) {
+          throw new Error('song.mp3 not found');
+        }
+        audioBlob = await response.blob();
+        statusDiv.textContent = "Found song.mp3!";
+      } catch (e) {
+        statusDiv.innerHTML = `<span style='color:#ffaa00'>⚠️ song.mp3 not found</span><br>` +
+                              `<span style='font-size:12px'>Please upload a song using the button above</span>`;
+        progressBar.style.width = "0%";
+        return;
+      }
+    }
+    
+    statusDiv.textContent = "Loading audio file...";
     progressBar.style.width = "10%";
     
+    // Create object URL from blob
+    const audioURL = URL.createObjectURL(audioBlob);
+    audio.src = audioURL;
+    
     await new Promise((resolve, reject) => {
-      if (audio.readyState >= 2) {
-        resolve();
-      } else {
-        audio.addEventListener('canplay', resolve, { once: true });
-        audio.addEventListener('error', (e) => {
-          reject(new Error('Failed to load song.mp3 - make sure the file exists!'));
-        }, { once: true });
-        audio.load();
-      }
+      audio.addEventListener('canplaythrough', resolve, { once: true });
+      audio.addEventListener('error', (e) => {
+        reject(new Error('Failed to load audio file'));
+      }, { once: true });
+      audio.load();
     });
     
     statusDiv.textContent = "Creating audio context...";
@@ -155,11 +213,10 @@ async function analyzeBeat() {
     const source = audioContext.createMediaElementSource(audio);
     source.connect(audioContext.destination);
     
-    statusDiv.textContent = "Fetching audio data...";
+    statusDiv.textContent = "Reading audio data...";
     progressBar.style.width = "30%";
     
-    const response = await fetch('song.mp3');
-    const arrayBuffer = await response.arrayBuffer();
+    const arrayBuffer = await audioBlob.arrayBuffer();
     
     statusDiv.textContent = "Decoding audio...";
     progressBar.style.width = "50%";
@@ -171,7 +228,6 @@ async function analyzeBeat() {
     
     const channelData = audioBuffer.getChannelData(0);
     const sampleRate = audioBuffer.sampleRate;
-    const duration = audioBuffer.duration;
     
     const beats = detectBeats(channelData, sampleRate);
     
@@ -188,7 +244,7 @@ async function analyzeBeat() {
       const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
       const bpm = Math.round(60000 / avgInterval);
       
-      statusDiv.textContent = `Its Ready`;
+      statusDiv.textContent = `Ready! (~${bpm} BPM)`;
     }
     
     progressBar.style.width = "100%";
@@ -201,10 +257,10 @@ async function analyzeBeat() {
   } catch (error) {
     console.error("Beat detection error:", error);
     statusDiv.innerHTML = `<span style='color:#ff4444'>❌ ${error.message}</span><br><br>` +
-                          `<span style='font-size:12px'>Try:<br>` +
-                          `1. Make sure song.mp3 is in the same folder<br>` +
-                          `2. Run with a local server (python -m http.server)<br>` +
-                          `3. Or use Chrome/Edge with --allow-file-access-from-files</span>`;
+                          `<span style='font-size:12px'>Troubleshooting tips:<br>` +
+                          `1. Make sure your audio file is valid<br>` +
+                          `2. Try a different audio format (MP3, WAV, OGG)<br>` +
+                          `3. Check browser console for details</span>`;
     progressBar.style.width = "0%";
   }
 }
@@ -312,7 +368,13 @@ window.addEventListener("keydown", e => {
     allowSpawning = false;
     startDelayTimer = setTimeout(() => {
       allowSpawning = true;
-      audio.play();
+      audio.play().catch(err => {
+        console.error("Audio play failed:", err);
+        statusDiv.textContent = "⚠️ Click anywhere to enable audio";
+        document.addEventListener('click', () => {
+          audio.play();
+        }, { once: true });
+      });
       startDelayTimer = null;
     }, START_DELAY);
   }
@@ -396,9 +458,8 @@ function spawnBlock(lane) {
   });
 }
 
-/* ================= NEW PATTERN FUNCTIONS ================= */
+/* ================= PATTERN FUNCTIONS ================= */
 
-// Original patterns
 function randomSingle() {
   const b = Array(LANE_COUNT).fill(false);
   b[Math.floor(Math.random() * LANE_COUNT)] = true;
@@ -427,9 +488,6 @@ function randomWall() {
   return b;
 }
 
-// NEW PATTERNS
-
-// Edges - blocks on both outer lanes
 function edgePattern() {
   const b = Array(LANE_COUNT).fill(false);
   b[0] = true;
@@ -437,7 +495,6 @@ function edgePattern() {
   return b;
 }
 
-// Center Focus - blocks in the middle lanes
 function centerPattern() {
   const b = Array(LANE_COUNT).fill(false);
   const mid = Math.floor(LANE_COUNT / 2);
@@ -447,20 +504,17 @@ function centerPattern() {
   return b;
 }
 
-// Alternating - every other lane
 function alternatingPattern() {
   const b = Array(LANE_COUNT).fill(false);
   const startOffset = Math.random() > 0.5 ? 0 : 1;
   for (let i = startOffset; i < LANE_COUNT; i += 2) {
     b[i] = true;
   }
-  // Ensure at least one safe lane
   const safeLane = startOffset === 0 ? 1 : 0;
   b[safeLane] = false;
   return b;
 }
 
-// Cascade - diagonal-like pattern (3 blocks)
 function cascadePattern() {
   const b = Array(LANE_COUNT).fill(false);
   const start = Math.floor(Math.random() * (LANE_COUNT - 2));
@@ -470,7 +524,6 @@ function cascadePattern() {
   return b;
 }
 
-// Side Squeeze - blocks on one side
 function sideSqueezePattern() {
   const b = Array(LANE_COUNT).fill(false);
   const leftSide = Math.random() > 0.5;
@@ -486,7 +539,6 @@ function sideSqueezePattern() {
   return b;
 }
 
-// Bookends - outer 2 lanes on each side
 function bookendsPattern() {
   const b = Array(LANE_COUNT).fill(false);
   b[0] = true;
@@ -496,13 +548,11 @@ function bookendsPattern() {
   return b;
 }
 
-// Random Triple - exactly 3 random lanes
 function randomTriplePattern() {
   const b = Array(LANE_COUNT).fill(false);
   const indices = [];
   for (let i = 0; i < LANE_COUNT; i++) indices.push(i);
   
-  // Shuffle and pick 3
   for (let i = indices.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [indices[i], indices[j]] = [indices[j], indices[i]];
@@ -514,7 +564,6 @@ function randomTriplePattern() {
   return b;
 }
 
-// Checker - 2 blocks with gap between
 function checkerPattern() {
   const b = Array(LANE_COUNT).fill(false);
   const first = Math.floor(Math.random() * (LANE_COUNT - 2));
@@ -523,7 +572,6 @@ function checkerPattern() {
   return b;
 }
 
-// Full Wall - all lanes except 1 (harder than randomWall)
 function fullWallPattern() {
   const b = Array(LANE_COUNT).fill(true);
   const safe = Math.floor(Math.random() * LANE_COUNT);
@@ -531,7 +579,6 @@ function fullWallPattern() {
   return b;
 }
 
-// Moving Wall - 4 blocks in a row (only 1 safe lane)
 function movingWallPattern() {
   const b = Array(LANE_COUNT).fill(false);
   const safe = Math.floor(Math.random() * LANE_COUNT);
@@ -590,28 +637,23 @@ function schedulePatternForBeat(beatIndex) {
 function generatePattern() {
   const intensity = Math.min(1, beatPulse + Math.random() * 0.3);
   
-  // High intensity - harder patterns
   if (intensity > 0.85) {
     const hardPatterns = [randomWall, fullWallPattern, movingWallPattern];
     return hardPatterns[Math.floor(Math.random() * hardPatterns.length)]();
   }
   
-  // Medium-high intensity
   if (intensity > 0.7) {
     const mediumHardPatterns = [randomBurst, cascadePattern, bookendsPattern, sideSqueezePattern];
     return mediumHardPatterns[Math.floor(Math.random() * mediumHardPatterns.length)]();
   }
   
-  // Medium intensity
   if (intensity > 0.5) {
     const mediumPatterns = [randomMerged, randomTriplePattern, alternatingPattern, centerPattern];
     return mediumPatterns[Math.floor(Math.random() * mediumPatterns.length)]();
   }
 
-  // 30% chance of no pattern (rest beat)
   if (Math.random() < 0.3) return Array(LANE_COUNT).fill(false);
   
-  // Low intensity - weighted selection
   const patterns = [
     { fn: randomSingle, weight: 5 },
     { fn: randomMerged, weight: 3 },
@@ -1035,6 +1077,7 @@ function restart() {
   audio.pause();
 }
 
+// Start the analysis on page load
 analyzeBeat();
 requestAnimationFrame(update);
 </script>
