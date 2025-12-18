@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Rhythm Dodger – Auto Beat Detection</title>
+<style>
+  body {
+    margin: 0;
+    background: #0a0a0a;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    color: white;
+    font-family: sans-serif;
+  }
+  canvas { background: #000; }
+  #loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    background: rgba(0,0,0,0.9);
+    padding: 30px 50px;
+    border-radius: 10px;
+    border: 2px solid #00ddff;
+  }
+  #loading h2 {
+    margin: 0 0 15px 0;
+    color: #00ddff;
+  }
+  #progress {
+    width: 300px;
+    height: 20px;
+    background: #222;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 15px 0;
+  }
+  #progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #00ddff, #00ff88);
+    width: 0%;
+    transition: width 0.3s;
+  }
+  .status {
+    font-size: 14px;
+    color: #aaa;
+    margin-top: 10px;
+  }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <h2>🎵 Analyzing Beat...</h2>
+  <div id="progress">
+    <div id="progress-bar"></div>
+  </div>
+  <div class="status" id="status">Loading song....</div>
+  <div style="font-size: 12px; color: #666; margin-top: 15px;">
+    Please be patient
+  </div>
+</div>
+
+<audio id="music" preload="auto" crossorigin="anonymous">
+  <source src="song.mp3" type="audio/mpeg">
+</audio>
+<canvas id="game" width="600" height="800"></canvas>
+
+<script>
+/* ================= CORE ================= */
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const audio = document.getElementById("music");
+const loadingDiv = document.getElementById("loading");
+const statusDiv = document.getElementById("status");
+const progressBar = document.getElementById("progress-bar");
+
+/* ================= SETTINGS ================= */
+const BLOCK_SPEED = 9;
+let BEAT_TIMES = [];
+let CURRENT_BEAT_INDEX = 0;
+
+const LANE_COUNT = 5;
+const GAP_SIZE = 2.5;
+const MIN_SAFE_LANES = 1;
+
+const PLATFORM_Y = 680;
+const PLATFORM_HEIGHT = 30;
+const PLATFORM_MARGIN = 80;
+const PLATFORM_WIDTH = canvas.width - PLATFORM_MARGIN * 2;
+const PLATFORM_X = PLATFORM_MARGIN;
+const LANE_WIDTH = PLATFORM_WIDTH / LANE_COUNT;
+
+const FPS = 60;
+const FRAME_TIME = 1000 / FPS;
+const START_DELAY = 1000;
+
+/* ================= GAME STATE ================= */
+let bullets = [];
+let lasers = [];
+let gameOver = false;
+let gameStarted = false;
+let analysisComplete = false;
+let allowSpawning = false;
+let startDelayTimer = null;
+
+let frameCount = 0;
+let scheduledBeats = new Set();
+let laneReservations = Array(LANE_COUNT).fill(0);
+let beatPulse = 0;
+
+/* ================= PLAYER ================= */
+const player = {
+  x: PLATFORM_X + PLATFORM_WIDTH / 2,
+  y: PLATFORM_Y - 16,
+  width: 32,
+  height: 16,
+  vx: 0,
+  vy: 0,
+  accel: 1,
+  friction: 0.88,
+  maxSpeed: 10,
+  gravity: 0.6,
+  jumpPower: -12,
+  isGrounded: false
+};
+const HIT_Y = PLATFORM_Y;
+
+/* ================= BEAT DETECTION ================= */
+async function analyzeBeat() {
+  
+  try {
+    statusDiv.textContent = "Loading song.mp3...";
+    progressBar.style.width = "10%";
+    
+    await new Promise((resolve, reject) => {
+      if (audio.readyState >= 2) {
+        resolve();
+      } else {
+        audio.addEventListener('canplay', resolve, { once: true });
+        audio.addEventListener('error', (e) => {
+          reject(new Error('Failed to load song.mp3 - make sure the file exists!'));
+        }, { once: true });
+        audio.load();
+      }
+    });
+    
+    statusDiv.textContent = "Creating audio context...";
+    progressBar.style.width = "20%";
+    
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioContext.createMediaElementSource(audio);
+    source.connect(audioContext.destination);
+    
+    statusDiv.textContent = "Fetching audio data...";
+    progressBar.style.width = "30%";
+    
+    const response = await fetch('song.mp3');
+    const arrayBuffer = await response.arrayBuffer();
+    
+    statusDiv.textContent = "Decoding audio...";
+    progressBar.style.width = "50%";
+    
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    
+    statusDiv.textContent = "Analyzing beats...";
+    progressBar.style.width = "70%";
+    
+    const channelData = audioBuffer.getChannelData(0);
+    const sampleRate = audioBuffer.sampleRate;
+    const duration = audioBuffer.duration;
+    
+    const beats = detectBeats(channelData, sampleRate);
+    
+    statusDiv.textContent = `Found ${beats.length} beats!`;
+    progressBar.style.width = "90%";
+    
+    BEAT_TIMES = beats;
+    
+    if (beats.length > 1) {
+      const intervals = [];
+      for (let i = 1; i < Math.min(beats.length, 50); i++) {
+        intervals.push(beats[i] - beats[i-1]);
+      }
+      const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      const bpm = Math.round(60000 / avgInterval);
+      
+      statusDiv.textContent = `Its Ready`;
+    }
+    
+    progressBar.style.width = "100%";
+    
+    setTimeout(() => {
+      analysisComplete = true;
+      loadingDiv.style.display = "none";
+    }, 800);
+    
+  } catch (error) {
+    console.error("Beat detection error:", error);
+    statusDiv.innerHTML = `<span style='color:#ff4444'>❌ ${error.message}</span><br><br>` +
+                          `<span style='font-size:12px'>Try:<br>` +
+                          `1. Make sure song.mp3 is in the same folder<br>` +
+                          `2. Run with a local server (python -m http.server)<br>` +
+                          `3. Or use Chrome/Edge with --allow-file-access-from-files</span>`;
+    progressBar.style.width = "0%";
+  }
+}
+
+function detectBeats(channelData, sampleRate) {
+  const beats = [];
+  
+  const windowSize = Math.floor(sampleRate * 0.05);
+  const hopSize = Math.floor(windowSize / 2);
+  const energyThreshold = 1.3;
+  
+  const energies = [];
+  for (let i = 0; i < channelData.length - windowSize; i += hopSize) {
+    let energy = 0;
+    for (let j = 0; j < windowSize; j++) {
+      const sample = channelData[i + j];
+      energy += sample * sample;
+    }
+    energies.push(energy / windowSize);
+  }
+  
+  const historySize = 43;
+  
+  for (let i = historySize; i < energies.length; i++) {
+    const currentEnergy = energies[i];
+    
+    let avgEnergy = 0;
+    for (let j = i - historySize; j < i; j++) {
+      avgEnergy += energies[j];
+    }
+    avgEnergy /= historySize;
+    
+    if (currentEnergy > avgEnergy * energyThreshold) {
+      const timeMs = (i * hopSize / sampleRate) * 1000;
+      
+      if (beats.length === 0 || timeMs - beats[beats.length - 1] > 200) {
+        beats.push(timeMs);
+      }
+    }
+  }
+  
+  if (beats.length > 4) {
+    return refineBeatTiming(beats);
+  }
+  
+  return beats;
+}
+
+function refineBeatTiming(rawBeats) {
+  const intervals = [];
+  for (let i = 1; i < rawBeats.length; i++) {
+    intervals.push(rawBeats[i] - rawBeats[i-1]);
+  }
+  
+  const histogram = {};
+  const tolerance = 50;
+  
+  intervals.forEach(interval => {
+    const bucket = Math.round(interval / tolerance) * tolerance;
+    histogram[bucket] = (histogram[bucket] || 0) + 1;
+  });
+  
+  let maxCount = 0;
+  let dominantInterval = 500;
+  
+  for (const [interval, count] of Object.entries(histogram)) {
+    if (count > maxCount) {
+      maxCount = count;
+      dominantInterval = parseFloat(interval);
+    }
+  }
+  
+  const refinedBeats = [rawBeats[0]];
+  let expectedTime = rawBeats[0] + dominantInterval;
+  
+  for (let i = 1; i < rawBeats.length; i++) {
+    const currentBeat = rawBeats[i];
+    
+    if (Math.abs(currentBeat - expectedTime) < tolerance) {
+      refinedBeats.push(expectedTime);
+      expectedTime += dominantInterval;
+    } else if (currentBeat > expectedTime + tolerance) {
+      refinedBeats.push(expectedTime);
+      expectedTime += dominantInterval;
+      i--;
+    }
+  }
+  
+  return refinedBeats;
+}
+
+/* ================= INPUT ================= */
+const keys = {};
+window.addEventListener("keydown", e => {
+  keys[e.key] = true;
+  
+  if (!gameStarted && analysisComplete) {
+    gameStarted = true;
+    
+    if (startDelayTimer) {
+      clearTimeout(startDelayTimer);
+      startDelayTimer = null;
+    }
+    
+    allowSpawning = false;
+    startDelayTimer = setTimeout(() => {
+      allowSpawning = true;
+      audio.play();
+      startDelayTimer = null;
+    }, START_DELAY);
+  }
+  
+  if ((e.key === " " || e.key === "ArrowUp") && player.isGrounded && !gameOver) {
+    player.vy = player.jumpPower;
+    player.isGrounded = false;
+  }
+  
+  if (gameOver && e.key.toLowerCase() === "r") restart();
+});
+window.addEventListener("keyup", e => keys[e.key] = false);
+
+/* ================= PLATFORM ================= */
+function isOnPlatform(x, y) {
+  const playerBottom = y + player.height;
+  
+  if (playerBottom >= PLATFORM_Y && playerBottom <= PLATFORM_Y + PLATFORM_HEIGHT) {
+    if (x + player.width > PLATFORM_X && x < PLATFORM_X + PLATFORM_WIDTH) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/* ================= SAFETY ================= */
+function hasSafeGap(blocked) {
+  let free = 0;
+  for (let i = 0; i < LANE_COUNT; i++) {
+    if (!blocked[i]) {
+      free++;
+      if (free >= MIN_SAFE_LANES) return true;
+    } else free = 0;
+  }
+  return false;
+}
+
+function isLaneAvailable(lane, hitTime) {
+  const occ = 400;
+  const buffer = 300;
+  const newStart = hitTime - occ / 2;
+  const newEnd = hitTime + occ / 2 + buffer;
+  const existing = laneReservations[lane];
+  if (!existing) return true;
+  const exStart = existing - occ / 2;
+  const exEnd = existing + occ / 2 + buffer;
+  return newEnd < exStart || newStart > exEnd;
+}
+
+function reserveLane(lane, hitTime) {
+  laneReservations[lane] = hitTime;
+}
+
+/* ================= SPAWN ================= */
+function spawnLaser(lane) {
+  if (!allowSpawning) return;
+  
+  const hue = Math.random() < 0.5 ? 320 + Math.random() * 40 : 40 + Math.random() * 20;
+  lasers.push({
+    lane,
+    time: 900,
+    maxTime: 900,
+    hue: hue,
+    phase: Math.random() * Math.PI * 2
+  });
+}
+
+function spawnBlock(lane) {
+  if (!allowSpawning) return;
+  
+  const blockWidth = LANE_WIDTH - GAP_SIZE * 2;
+  const blockHeight = blockWidth * 0.6;
+  const hue = Math.random() < 0.5 ? 320 + Math.random() * 40 : 40 + Math.random() * 20;
+  bullets.push({
+    x: PLATFORM_X + lane * LANE_WIDTH + GAP_SIZE,
+    y: -blockHeight,
+    w: blockWidth,
+    h: blockHeight,
+    speed: BLOCK_SPEED,
+    hue: hue
+  });
+}
+
+/* ================= NEW PATTERN FUNCTIONS ================= */
+
+// Original patterns
+function randomSingle() {
+  const b = Array(LANE_COUNT).fill(false);
+  b[Math.floor(Math.random() * LANE_COUNT)] = true;
+  return b;
+}
+
+function randomMerged() {
+  const b = Array(LANE_COUNT).fill(false);
+  const s = Math.floor(Math.random() * (LANE_COUNT - 1));
+  b[s] = b[s + 1] = true;
+  return b;
+}
+
+function randomBurst() {
+  const b = Array(LANE_COUNT).fill(false);
+  for (let i = 0; i < 3; i++) b[Math.floor(Math.random() * LANE_COUNT)] = true;
+  return b;
+}
+
+function randomWall() {
+  const b = Array(LANE_COUNT).fill(true);
+  const safe = Math.floor(Math.random() * LANE_COUNT);
+  b[safe] = false;
+  if (safe > 0) b[safe - 1] = false;
+  else b[safe + 1] = false;
+  return b;
+}
+
+// NEW PATTERNS
+
+// Edges - blocks on both outer lanes
+function edgePattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  b[0] = true;
+  b[LANE_COUNT - 1] = true;
+  return b;
+}
+
+// Center Focus - blocks in the middle lanes
+function centerPattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  const mid = Math.floor(LANE_COUNT / 2);
+  b[mid] = true;
+  if (mid > 0) b[mid - 1] = true;
+  if (mid < LANE_COUNT - 1) b[mid + 1] = true;
+  return b;
+}
+
+// Alternating - every other lane
+function alternatingPattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  const startOffset = Math.random() > 0.5 ? 0 : 1;
+  for (let i = startOffset; i < LANE_COUNT; i += 2) {
+    b[i] = true;
+  }
+  // Ensure at least one safe lane
+  const safeLane = startOffset === 0 ? 1 : 0;
+  b[safeLane] = false;
+  return b;
+}
+
+// Cascade - diagonal-like pattern (3 blocks)
+function cascadePattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  const start = Math.floor(Math.random() * (LANE_COUNT - 2));
+  b[start] = true;
+  b[start + 1] = true;
+  b[start + 2] = true;
+  return b;
+}
+
+// Side Squeeze - blocks on one side
+function sideSqueezePattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  const leftSide = Math.random() > 0.5;
+  if (leftSide) {
+    b[0] = true;
+    b[1] = true;
+    if (LANE_COUNT > 3) b[2] = true;
+  } else {
+    b[LANE_COUNT - 1] = true;
+    b[LANE_COUNT - 2] = true;
+    if (LANE_COUNT > 3) b[LANE_COUNT - 3] = true;
+  }
+  return b;
+}
+
+// Bookends - outer 2 lanes on each side
+function bookendsPattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  b[0] = true;
+  b[1] = true;
+  b[LANE_COUNT - 1] = true;
+  b[LANE_COUNT - 2] = true;
+  return b;
+}
+
+// Random Triple - exactly 3 random lanes
+function randomTriplePattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  const indices = [];
+  for (let i = 0; i < LANE_COUNT; i++) indices.push(i);
+  
+  // Shuffle and pick 3
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  
+  b[indices[0]] = true;
+  b[indices[1]] = true;
+  b[indices[2]] = true;
+  return b;
+}
+
+// Checker - 2 blocks with gap between
+function checkerPattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  const first = Math.floor(Math.random() * (LANE_COUNT - 2));
+  b[first] = true;
+  b[first + 2] = true;
+  return b;
+}
+
+// Full Wall - all lanes except 1 (harder than randomWall)
+function fullWallPattern() {
+  const b = Array(LANE_COUNT).fill(true);
+  const safe = Math.floor(Math.random() * LANE_COUNT);
+  b[safe] = false;
+  return b;
+}
+
+// Moving Wall - 4 blocks in a row (only 1 safe lane)
+function movingWallPattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  const safe = Math.floor(Math.random() * LANE_COUNT);
+  for (let i = 0; i < LANE_COUNT; i++) {
+    if (i !== safe) b[i] = true;
+  }
+  return b;
+}
+
+/* ================= PATTERN SCHEDULING ================= */
+function schedulePatternForBeat(beatIndex) {
+  if (beatIndex >= BEAT_TIMES.length || scheduledBeats.has(beatIndex)) return;
+  
+  scheduledBeats.add(beatIndex);
+  
+  const blockWidth = LANE_WIDTH - GAP_SIZE * 2;
+  const blockHeight = blockWidth * 0.6;
+  const travelDistance = HIT_Y + blockHeight;
+  const travelFrames = travelDistance / BLOCK_SPEED;
+  const travelTimeMs = travelFrames * FRAME_TIME;
+  const targetHitTime = BEAT_TIMES[beatIndex];
+  const currentTime = audio.currentTime * 1000;
+  const spawnDelay = targetHitTime - currentTime - travelTimeMs;
+  
+  if (spawnDelay < -100) return;
+  
+  let pattern = generatePattern();
+  let available = pattern.map((b, i) => b && isLaneAvailable(i, targetHitTime));
+
+  if (!available.some(v => v)) {
+    const candidates = [];
+    for (let i = 0; i < LANE_COUNT; i++) {
+      if (isLaneAvailable(i, targetHitTime)) {
+        candidates.push(i);
+      }
+    }
+
+    if (candidates.length > 0) {
+      const forcedLane = candidates[Math.floor(Math.random() * candidates.length)];
+      available[forcedLane] = true;
+    }
+  }
+
+  if (!hasSafeGap(available)) return;
+
+  available.forEach((spawn, lane) => {
+    if (!spawn) return;
+    reserveLane(lane, targetHitTime);
+    setTimeout(() => {
+      spawnLaser(lane);
+      spawnBlock(lane);
+    }, Math.max(0, spawnDelay));
+  });
+}
+
+function generatePattern() {
+  const intensity = Math.min(1, beatPulse + Math.random() * 0.3);
+  
+  // High intensity - harder patterns
+  if (intensity > 0.85) {
+    const hardPatterns = [randomWall, fullWallPattern, movingWallPattern];
+    return hardPatterns[Math.floor(Math.random() * hardPatterns.length)]();
+  }
+  
+  // Medium-high intensity
+  if (intensity > 0.7) {
+    const mediumHardPatterns = [randomBurst, cascadePattern, bookendsPattern, sideSqueezePattern];
+    return mediumHardPatterns[Math.floor(Math.random() * mediumHardPatterns.length)]();
+  }
+  
+  // Medium intensity
+  if (intensity > 0.5) {
+    const mediumPatterns = [randomMerged, randomTriplePattern, alternatingPattern, centerPattern];
+    return mediumPatterns[Math.floor(Math.random() * mediumPatterns.length)]();
+  }
+
+  // 30% chance of no pattern (rest beat)
+  if (Math.random() < 0.3) return Array(LANE_COUNT).fill(false);
+  
+  // Low intensity - weighted selection
+  const patterns = [
+    { fn: randomSingle, weight: 5 },
+    { fn: randomMerged, weight: 3 },
+    { fn: edgePattern, weight: 3 },
+    { fn: checkerPattern, weight: 3 },
+    { fn: centerPattern, weight: 3 },
+    { fn: randomBurst, weight: 3 },
+    { fn: cascadePattern, weight: 3 },
+    { fn: alternatingPattern, weight: 3 }
+  ];
+
+  let r = Math.random() * patterns.reduce((s, p) => s + p.weight, 0);
+  for (const p of patterns) {
+    if ((r -= p.weight) <= 0) return p.fn();
+  }
+  return Array(LANE_COUNT).fill(false);
+}
+
+/* ================= DRAWING ================= */
+function drawWalls() {
+  const wallWidth = PLATFORM_MARGIN;
+  const leftGrad = ctx.createLinearGradient(0, 0, wallWidth, 0);
+  leftGrad.addColorStop(0, "#1a1a1a");
+  leftGrad.addColorStop(0.7, "#2a2a2a");
+  leftGrad.addColorStop(1, "#1a1a1a");
+  ctx.fillStyle = leftGrad;
+  ctx.fillRect(0, 0, wallWidth, canvas.height);
+  
+  ctx.strokeStyle = "#0a0a0a";
+  ctx.lineWidth = 2;
+  for (let i = 0; i < canvas.height; i += 60) {
+    ctx.beginPath();
+    ctx.moveTo(0, i);
+    ctx.lineTo(wallWidth, i);
+    ctx.stroke();
+  }
+  
+  ctx.strokeStyle = "#333";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(wallWidth - 1, 0);
+  ctx.lineTo(wallWidth - 1, canvas.height);
+  ctx.stroke();
+  
+  const rightGrad = ctx.createLinearGradient(canvas.width - wallWidth, 0, canvas.width, 0);
+  rightGrad.addColorStop(0, "#1a1a1a");
+  rightGrad.addColorStop(0.3, "#2a2a2a");
+  rightGrad.addColorStop(1, "#1a1a1a");
+  ctx.fillStyle = rightGrad;
+  ctx.fillRect(canvas.width - wallWidth, 0, wallWidth, canvas.height);
+  
+  for (let i = 0; i < canvas.height; i += 60) {
+    ctx.beginPath();
+    ctx.moveTo(canvas.width - wallWidth, i);
+    ctx.lineTo(canvas.width, i);
+    ctx.stroke();
+  }
+  
+  ctx.strokeStyle = "#333";
+  ctx.beginPath();
+  ctx.moveTo(canvas.width - wallWidth + 1, 0);
+  ctx.lineTo(canvas.width - wallWidth + 1, canvas.height);
+  ctx.stroke();
+  
+  const ceilingHeight = 40;
+  const ceilingGrad = ctx.createLinearGradient(0, 0, 0, ceilingHeight);
+  ceilingGrad.addColorStop(0, "#2a2a2a");
+  ceilingGrad.addColorStop(1, "#0a0a0a");
+  ctx.fillStyle = ceilingGrad;
+  ctx.fillRect(0, 0, canvas.width, ceilingHeight);
+  
+  ctx.strokeStyle = "#1a1a1a";
+  ctx.lineWidth = 2;
+  for (let i = 0; i < canvas.width; i += 80) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, ceilingHeight);
+    ctx.stroke();
+  }
+  
+  ctx.strokeStyle = "#333";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, ceilingHeight);
+  ctx.lineTo(canvas.width, ceilingHeight);
+  ctx.stroke();
+}
+
+function draw3DPlatform() {
+  const depth = 50;
+  const topY = PLATFORM_Y;
+  const bottomY = PLATFORM_Y + PLATFORM_HEIGHT;
+  
+  const shadowGrad = ctx.createLinearGradient(0, bottomY, 0, bottomY + depth);
+  shadowGrad.addColorStop(0, "rgba(0,0,0,0.8)");
+  shadowGrad.addColorStop(1, "rgba(0,0,0,0.3)");
+  ctx.fillStyle = shadowGrad;
+  ctx.fillRect(PLATFORM_X - 10, bottomY, PLATFORM_WIDTH + 20, depth);
+  
+  const leftBevel = ctx.createLinearGradient(PLATFORM_X - 8, 0, PLATFORM_X, 0);
+  leftBevel.addColorStop(0, "#1a1a1a");
+  leftBevel.addColorStop(1, "#2a2a2a");
+  ctx.fillStyle = leftBevel;
+  ctx.beginPath();
+  ctx.moveTo(PLATFORM_X - 8, topY + 5);
+  ctx.lineTo(PLATFORM_X, topY);
+  ctx.lineTo(PLATFORM_X, bottomY + depth);
+  ctx.lineTo(PLATFORM_X - 8, bottomY + depth + 5);
+  ctx.closePath();
+  ctx.fill();
+  
+  const rightBevel = ctx.createLinearGradient(PLATFORM_X + PLATFORM_WIDTH, 0, PLATFORM_X + PLATFORM_WIDTH + 8, 0);
+  rightBevel.addColorStop(0, "#2a2a2a");
+  rightBevel.addColorStop(1, "#1a1a1a");
+  ctx.fillStyle = rightBevel;
+  ctx.beginPath();
+  ctx.moveTo(PLATFORM_X + PLATFORM_WIDTH, topY);
+  ctx.lineTo(PLATFORM_X + PLATFORM_WIDTH + 8, topY + 5);
+  ctx.lineTo(PLATFORM_X + PLATFORM_WIDTH + 8, bottomY + depth + 5);
+  ctx.lineTo(PLATFORM_X + PLATFORM_WIDTH, bottomY + depth);
+  ctx.closePath();
+  ctx.fill();
+  
+  const frontGrad = ctx.createLinearGradient(0, topY, 0, bottomY);
+  frontGrad.addColorStop(0, "#5a5a5a");
+  frontGrad.addColorStop(0.15, "#4a4a4a");
+  frontGrad.addColorStop(0.5, "#3a3a3a");
+  frontGrad.addColorStop(0.85, "#353535");
+  frontGrad.addColorStop(1, "#2a2a2a");
+  ctx.fillStyle = frontGrad;
+  ctx.fillRect(PLATFORM_X, topY, PLATFORM_WIDTH, PLATFORM_HEIGHT);
+  
+  const pulseIntensity = beatPulse * 0.3;
+  const topHighlight = ctx.createLinearGradient(0, topY, 0, topY + 6);
+  topHighlight.addColorStop(0, `rgba(${150 + pulseIntensity * 100},${150 + pulseIntensity * 100},${150 + pulseIntensity * 100},${0.8 + pulseIntensity})`);
+  topHighlight.addColorStop(1, "rgba(150,150,150,0)");
+  ctx.fillStyle = topHighlight;
+  ctx.fillRect(PLATFORM_X, topY, PLATFORM_WIDTH, 6);
+  
+  ctx.strokeStyle = "#222";
+  ctx.lineWidth = 1;
+  for (let i = 1; i < LANE_COUNT; i++) {
+    const x = PLATFORM_X + i * LANE_WIDTH;
+    ctx.beginPath();
+    ctx.moveTo(x, topY + 5);
+    ctx.lineTo(x, bottomY - 2);
+    ctx.stroke();
+  }
+  
+  ctx.strokeStyle = "#2a2a2a";
+  ctx.beginPath();
+  ctx.moveTo(PLATFORM_X + 5, topY + PLATFORM_HEIGHT / 2);
+  ctx.lineTo(PLATFORM_X + PLATFORM_WIDTH - 5, topY + PLATFORM_HEIGHT / 2);
+  ctx.stroke();
+  
+  ctx.strokeStyle = "#1a1a1a";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(PLATFORM_X, bottomY);
+  ctx.lineTo(PLATFORM_X + PLATFORM_WIDTH, bottomY);
+  ctx.stroke();
+  
+  ctx.shadowBlur = 8 + beatPulse * 12;
+  ctx.shadowColor = `rgba(0,200,255,${0.3 + beatPulse * 0.4})`;
+  ctx.strokeStyle = `rgba(0,200,255,${0.5 + beatPulse * 0.3})`;
+  ctx.lineWidth = 1 + beatPulse * 2;
+  ctx.beginPath();
+  ctx.moveTo(PLATFORM_X, topY);
+  ctx.lineTo(PLATFORM_X + PLATFORM_WIDTH, topY);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  
+  ctx.fillStyle = "#1a1a1a";
+  const rivetSize = 3;
+  [[PLATFORM_X + 10, topY + 8],
+   [PLATFORM_X + PLATFORM_WIDTH - 10, topY + 8],
+   [PLATFORM_X + 10, bottomY - 8],
+   [PLATFORM_X + PLATFORM_WIDTH - 10, bottomY - 8]].forEach(([x, y]) => {
+    ctx.beginPath();
+    ctx.arc(x, y, rivetSize, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#444";
+    ctx.beginPath();
+    ctx.arc(x - 1, y - 1, rivetSize * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#1a1a1a";
+  });
+}
+
+/* ================= MAIN LOOP ================= */
+function update() {
+  if (!analysisComplete) {
+    requestAnimationFrame(update);
+    return;
+  }
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  frameCount++;
+  beatPulse *= 0.85;
+
+  if (gameStarted && !gameOver) {
+    const currentTime = audio.currentTime * 1000;
+    
+    while (CURRENT_BEAT_INDEX < BEAT_TIMES.length && BEAT_TIMES[CURRENT_BEAT_INDEX] < currentTime) {
+      CURRENT_BEAT_INDEX++;
+      beatPulse = 1;
+    }
+    if (allowSpawning && BEAT_TIMES.length > 0) {
+      const lastBeatTime = BEAT_TIMES[CURRENT_BEAT_INDEX - 1] || 0;
+      const gap = currentTime - lastBeatTime;
+
+      if (gap > 600) {
+        BEAT_TIMES.splice(CURRENT_BEAT_INDEX, 0, currentTime);
+        beatPulse = 1;
+      }
+    }
+    
+    if (allowSpawning) {
+      const lookAheadTime = currentTime + 3000;
+      for (let i = CURRENT_BEAT_INDEX; i < BEAT_TIMES.length; i++) {
+        if (BEAT_TIMES[i] > lookAheadTime) break;
+        schedulePatternForBeat(i);
+      }
+    }
+    
+    if (keys["ArrowLeft"]) player.vx -= player.accel;
+    if (keys["ArrowRight"]) player.vx += player.accel;
+    player.vx *= player.friction;
+    player.vx = Math.max(-player.maxSpeed, Math.min(player.maxSpeed, player.vx));
+    player.x += player.vx;
+    
+    player.vy += player.gravity;
+    player.y += player.vy;
+    
+    if (player.y + player.height >= PLATFORM_Y && player.vy >= 0) {
+      if (isOnPlatform(player.x, player.y)) {
+        player.y = PLATFORM_Y - player.height;
+        player.vy = 0;
+        player.isGrounded = true;
+      } else {
+        player.isGrounded = false;
+      }
+    } else {
+      player.isGrounded = false;
+    }
+    
+    if (player.y > canvas.height) gameOver = true;
+  }
+
+  drawWalls();
+  draw3DPlatform();
+  
+  ctx.strokeStyle = "#1a1a1a";
+  ctx.lineWidth = 1;
+  for (let i = 1; i < LANE_COUNT; i++) {
+    const lx = PLATFORM_X + i * LANE_WIDTH;
+    ctx.beginPath();
+    ctx.moveTo(lx, 40);
+    ctx.lineTo(lx, PLATFORM_Y);
+    ctx.stroke();
+  }
+
+  for (let i = lasers.length - 1; i >= 0; i--) {
+    const l = lasers[i];
+    l.time -= FRAME_TIME;
+    const progress = 1 - l.time / l.maxTime;
+    
+    let intensity = progress < 0.15 ? progress / 0.15 : progress < 0.8 ? 1 : (1 - progress) / 0.2;
+    
+    const beatPulseEffect = Math.sin(frameCount * (0.15 + progress * 0.25) + l.phase) * 0.5 + 0.5;
+    const breathingPulse = Math.sin(frameCount * 0.08 + l.phase) * 0.3 + 0.7;
+    const combinedPulse = beatPulseEffect * breathingPulse;
+
+    const x = PLATFORM_X + l.lane * LANE_WIDTH + LANE_WIDTH / 2;
+    const blockWidth = LANE_WIDTH - GAP_SIZE * 2;
+    const widthMultiplier = progress < 0.15 ? 0.2 : progress < 0.5 ? 0.2 + ((progress - 0.15) / 0.35) * 0.8 : progress < 0.8 ? 1 : 1 - ((progress - 0.8) / 0.2) * 0.5;
+    const pulsedBrightness = intensity * (0.2 + progress * 0.2) * (0.5 + combinedPulse * 0.3);
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    
+    if (intensity > 0.3) {
+      for (let p = 0; p < 8; p++) {
+        const angle = (p / 8) * Math.PI * 2 + frameCount * 0.02;
+        const distance = (blockWidth * 0.4 + combinedPulse * 10) * widthMultiplier * (0.7 + Math.sin(frameCount * 0.05 + p) * 0.3);
+        const px = x + Math.cos(angle) * distance;
+        const particleSize = (15 + combinedPulse * 10) * widthMultiplier;
+        
+        const particleGrad = ctx.createRadialGradient(px, PLATFORM_Y / 2, 0, px, PLATFORM_Y / 2, particleSize);
+        particleGrad.addColorStop(0, `hsla(${l.hue},100%,70%,${pulsedBrightness * 0.5})`);
+        particleGrad.addColorStop(0.5, `hsla(${l.hue},100%,60%,${pulsedBrightness * 0.25})`);
+        particleGrad.addColorStop(1, `hsla(${l.hue},100%,50%,0)`);
+        ctx.fillStyle = particleGrad;
+        ctx.fillRect(px - particleSize, 40, particleSize * 2, PLATFORM_Y - 40);
+      }
+    }
+    
+    const layers = [
+      { width: blockWidth * 1.3, blur: 35, opacity: 0.3 },
+      { width: blockWidth * 0.9 + combinedPulse * blockWidth * 0.1, blur: 28, opacity: 0.5 },
+      { width: blockWidth + combinedPulse * blockWidth * 0.05, blur: 20, opacity: 0.7 },
+      { width: blockWidth * 0.7 + combinedPulse * blockWidth * 0.05, blur: 15, opacity: 0.8 },
+      { width: blockWidth * 0.4 + combinedPulse * blockWidth * 0.05, blur: 12, opacity: 0.9 }
+    ];
+    
+    layers.forEach((layer, idx) => {
+      const w = layer.width * widthMultiplier;
+      ctx.shadowBlur = layer.blur * intensity;
+      ctx.shadowColor = `hsla(${l.hue},100%,${60 + idx * 5}%,${pulsedBrightness})`;
+      ctx.fillStyle = `hsla(${l.hue},100%,${60 + idx * 5}%,${pulsedBrightness * layer.opacity})`;
+      ctx.fillRect(x - w / 2, 40, w, PLATFORM_Y - 40);
+    });
+    
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    if (l.time <= 0) lasers.splice(i, 1);
+  }
+
+  if (gameStarted) {
+    ctx.fillStyle = "#00ddff";
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+    ctx.fillStyle = "white";
+    ctx.fillRect(player.x + 8, player.y + 4, 4, 4);
+    ctx.fillRect(player.x + 20, player.y + 4, 4, 4);
+  }
+
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.y += b.speed;
+
+    if (b.y < PLATFORM_Y + PLATFORM_HEIGHT) {
+      const blurLength = 50;
+      const blurStartY = Math.max(40, b.y - blurLength);
+      
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      const blurGrad = ctx.createLinearGradient(b.x + b.w / 2, blurStartY, b.x + b.w / 2, b.y);
+      blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
+      blurGrad.addColorStop(0.3, `hsla(${b.hue},100%,60%,0.15)`);
+      blurGrad.addColorStop(0.6, `hsla(${b.hue},100%,60%,0.4)`);
+      blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.7)`);
+      ctx.fillStyle = blurGrad;
+      ctx.fillRect(b.x, blurStartY, b.w, b.y - blurStartY);
+      ctx.restore();
+
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      const r = Math.max(b.w, b.h) * 1.4;
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, `hsla(${b.hue},100%,55%,0.4)`);
+      g.addColorStop(0.5, `hsla(${b.hue},100%,50%,0.2)`);
+      g.addColorStop(1, `hsla(${b.hue},100%,50%,0)`);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = g;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      ctx.restore();
+
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = `hsl(${b.hue},100%,60%)`;
+      ctx.fillStyle = `hsl(${b.hue},100%,60%)`;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.fillStyle = `hsl(${b.hue},100%,80%)`;
+      ctx.fillRect(b.x + b.w * 0.3, b.y + b.h * 0.3, b.w * 0.4, b.h * 0.4);
+      ctx.shadowBlur = 0;
+    }
+
+    if (gameStarted && player.x < b.x + b.w && player.x + player.width > b.x && player.y < b.y + b.h && player.y + player.height > b.y) 
+      gameOver = true;
+    if (b.y > canvas.height) bullets.splice(i, 1);
+  }
+
+  if (!gameStarted) {
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#00ddff";
+    ctx.font = "40px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("READY!", canvas.width / 2, canvas.height / 2 - 20);
+    ctx.fillStyle = "white";
+    ctx.font = "20px sans-serif";
+    ctx.fillText("Press any key to start", canvas.width / 2, canvas.height / 2 + 20);
+    ctx.textAlign = "left";
+  }
+
+  if (gameOver) {
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "white";
+    ctx.font = "40px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
+    ctx.font = "20px sans-serif";
+    ctx.fillText("Press R to Restart", canvas.width / 2, canvas.height / 2 + 40);
+    ctx.textAlign = "left";
+  }
+
+  requestAnimationFrame(update);
+}
+
+function restart() {
+  if (startDelayTimer) {
+    clearTimeout(startDelayTimer);
+    startDelayTimer = null;
+  }
+  
+  bullets = [];
+  lasers = [];
+  laneReservations.fill(0);
+  gameOver = false;
+  gameStarted = false;
+  allowSpawning = false;
+  frameCount = 0;
+  CURRENT_BEAT_INDEX = 0;
+  scheduledBeats.clear();
+  player.x = PLATFORM_X + PLATFORM_WIDTH / 2;
+  player.y = PLATFORM_Y - player.height;
+  player.vx = 0;
+  player.vy = 0;
+  player.isGrounded = true;
+  audio.currentTime = 0;
+  audio.pause();
+}
+
+analyzeBeat();
+requestAnimationFrame(update);
+</script>
+</body>
+</html>
