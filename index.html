@@ -131,11 +131,16 @@ const HIT_Y = PLATFORM_Y;
 /* ================= BEAT DETECTION ================= */
 async function analyzeBeat() {
   try {
+    console.log("Starting beat analysis...");
+    console.log("Current URL:", window.location.href);
+    console.log("Song URL:", window.location.origin + '/song.mp3');
+    
     statusDiv.textContent = "Loading song...";
     progressBar.style.width = "10%";
     
     // First, set the audio source and wait for it to be ready
     audio.src = 'song.mp3';
+    console.log("Audio source set to:", audio.src);
     
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -144,6 +149,8 @@ async function analyzeBeat() {
       
       audio.addEventListener('canplaythrough', () => {
         clearTimeout(timeout);
+        console.log("✓ Audio loaded successfully!");
+        console.log("Audio duration:", audio.duration, "seconds");
         resolve();
       }, { once: true });
       
@@ -327,6 +334,7 @@ window.addEventListener("keydown", e => {
   keys[e.key] = true;
   
   if (!gameStarted && analysisComplete) {
+    console.log("🎮 Starting game!");
     gameStarted = true;
     
     if (startDelayTimer) {
@@ -335,18 +343,31 @@ window.addEventListener("keydown", e => {
     }
     
     // Start audio immediately on first keypress to satisfy browser autoplay policy
+    console.log("Attempting to unlock audio...");
     audio.play().then(() => {
+      console.log("✓ Audio unlocked successfully!");
       audio.pause();
       audio.currentTime = 0;
+      console.log("Audio reset to start");
     }).catch(err => {
-      console.log("Initial audio unlock:", err);
+      console.log("⚠️ Initial audio unlock failed:", err);
     });
     
     allowSpawning = false;
     startDelayTimer = setTimeout(() => {
+      console.log("🎵 Starting audio playback now...");
       allowSpawning = true;
-      audio.play().catch(err => {
-        console.error("Audio play failed:", err);
+      audio.play().then(() => {
+        console.log("✓ Audio playing! Current time:", audio.currentTime);
+      }).catch(err => {
+        console.error("❌ Audio play failed:", err);
+        console.log("Audio state:", {
+          paused: audio.paused,
+          currentTime: audio.currentTime,
+          duration: audio.duration,
+          readyState: audio.readyState,
+          networkState: audio.networkState
+        });
       });
       startDelayTimer = null;
     }, START_DELAY);
