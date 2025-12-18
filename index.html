@@ -110,6 +110,7 @@ let frameCount = 0;
 let scheduledBeats = new Set();
 let laneReservations = Array(LANE_COUNT).fill(0);
 let beatPulse = 0;
+let audioStarted = false; // Prevent multiple audio starts
 
 /* ================= PLAYER ================= */
 const player = {
@@ -174,9 +175,9 @@ async function analyzeBeat() {
     statusDiv.textContent = "Creating audio context...";
     progressBar.style.width = "25%";
     
+    // Create audio context but DON'T connect it to the audio element
+    // We'll decode a separate copy for analysis only
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const source = audioContext.createMediaElementSource(audio);
-    source.connect(audioContext.destination);
     
     statusDiv.textContent = "Fetching audio data...";
     progressBar.style.width = "35%";
@@ -333,9 +334,10 @@ const keys = {};
 window.addEventListener("keydown", e => {
   keys[e.key] = true;
   
-  if (!gameStarted && analysisComplete) {
+  if (!gameStarted && analysisComplete && !audioStarted) {
     console.log("🎮 Starting game!");
     gameStarted = true;
+    audioStarted = true;
     
     if (startDelayTimer) {
       clearTimeout(startDelayTimer);
@@ -356,9 +358,19 @@ window.addEventListener("keydown", e => {
     allowSpawning = false;
     startDelayTimer = setTimeout(() => {
       console.log("🎵 Starting audio playback now...");
+      console.log("Audio state before play:", {
+        paused: audio.paused,
+        currentTime: audio.currentTime,
+        duration: audio.duration,
+        readyState: audio.readyState
+      });
       allowSpawning = true;
       audio.play().then(() => {
         console.log("✓ Audio playing! Current time:", audio.currentTime);
+        // Check again after a moment
+        setTimeout(() => {
+          console.log("Audio check after 500ms - Current time:", audio.currentTime, "Paused:", audio.paused);
+        }, 500);
       }).catch(err => {
         console.error("❌ Audio play failed:", err);
         console.log("Audio state:", {
@@ -1058,6 +1070,7 @@ function restart() {
   laneReservations.fill(0);
   gameOver = false;
   gameStarted = false;
+  audioStarted = false;
   allowSpawning = false;
   frameCount = 0;
   CURRENT_BEAT_INDEX = 0;
@@ -1069,6 +1082,7 @@ function restart() {
   player.isGrounded = true;
   audio.currentTime = 0;
   audio.pause();
+  console.log("Game restarted");
 }
 
 analyzeBeat();
