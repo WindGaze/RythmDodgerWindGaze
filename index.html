@@ -334,6 +334,14 @@ window.addEventListener("keydown", e => {
       startDelayTimer = null;
     }
     
+    // Start audio immediately on first keypress to satisfy browser autoplay policy
+    audio.play().then(() => {
+      audio.pause();
+      audio.currentTime = 0;
+    }).catch(err => {
+      console.log("Initial audio unlock:", err);
+    });
+    
     allowSpawning = false;
     startDelayTimer = setTimeout(() => {
       allowSpawning = true;
