@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Rhythm Dodger – Auto Beat Detection</title>
+<title>Rhythm Dodger – Auto Beat Detection [PHASE 2]</title>
 <style>
   body {
     margin: 0;
@@ -13,8 +13,241 @@
     height: 100vh;
     color: white;
     font-family: sans-serif;
+    overflow: hidden;
+    position: relative;
   }
-  canvas { background: #000; }
+  
+  #game-container {
+    position: relative;
+    display: inline-block;
+  }
+  
+  canvas { 
+    background: #000;
+    position: relative;
+    z-index: 1;
+    display: block;
+  }
+  
+  /* Background image layer */
+  #bg-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+  
+  /* Lives display - near canvas top-left */
+  #lives-container {
+    position: absolute;
+    top: 50px;
+    left: 20px;
+    display: flex;
+    gap: 15px;
+    z-index: 10;
+    pointer-events: none;
+  }
+  
+  /* Progress Bar - ELEVATED */
+  #progress-container {
+    position: absolute;
+    bottom: 80px; /* Moved up from 20px to 80px */
+    left: 20px;
+    right: 20px;
+    height: 8px; /* Slightly taller for better visibility */
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    overflow: hidden;
+    z-index: 10;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  }
+  
+  #progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #ff0066, #ff3388, #00ddff);
+    border-radius: 4px;
+    transition: width 0.1s linear;
+    box-shadow: 0 0 10px rgba(255, 0, 102, 0.5);
+  }
+  
+  #progress-time {
+    position: absolute;
+    bottom: 92px;
+    left: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+    z-index: 10;
+    font-family: monospace;
+    display: none; /* HIDDEN */
+  }
+  
+  .heart {
+    width: 40px;
+    height: 40px;
+    position: relative;
+    animation: heartbeat 1.5s ease-in-out infinite;
+  }
+  
+  .heart.lost {
+    opacity: 0.2;
+    animation: none;
+    filter: grayscale(100%);
+  }
+  
+  .heart.damage {
+    animation: heartDamage 0.5s ease-out;
+  }
+  
+  @keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+  }
+  
+  @keyframes heartDamage {
+    0% { transform: scale(1.5); filter: brightness(2); }
+    50% { transform: scale(0.8) rotate(-10deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+  
+  /* Mobile Controls */
+  #mobile-controls {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    gap: 30px;
+    z-index: 10;
+  }
+  
+  #mobile-controls.active {
+    display: flex;
+  }
+  
+  .control-button {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, rgba(255, 0, 102, 0.8), rgba(255, 51, 136, 0.8));
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 40px;
+    color: white;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    box-shadow: 0 4px 15px rgba(255, 0, 102, 0.5);
+  }
+  
+  .control-button:active {
+    transform: scale(0.9);
+    background: linear-gradient(135deg, rgba(255, 0, 102, 1), rgba(255, 51, 136, 1));
+    box-shadow: 0 2px 10px rgba(255, 0, 102, 0.8);
+  }
+  
+  .control-button.pressed {
+    transform: scale(0.9);
+    background: linear-gradient(135deg, rgba(255, 0, 102, 1), rgba(255, 51, 136, 1));
+  }
+  
+  /* Game Over Screen */
+  #game-over-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    z-index: 100;
+    animation: fadeIn 0.5s ease-out;
+  }
+  
+  #game-over-screen.show {
+    display: flex;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  .game-over-content {
+    text-align: center;
+    animation: slideUp 0.5s ease-out;
+  }
+  
+  @keyframes slideUp {
+    from { transform: translateY(50px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  
+  .game-over-title {
+    font-size: 60px;
+    font-weight: bold;
+    color: #ff0066;
+    margin-bottom: 20px;
+    text-shadow: 0 0 20px rgba(255, 0, 102, 0.8);
+  }
+  
+  .game-over-phase {
+    font-size: 24px;
+    color: #00ddff;
+    margin-bottom: 30px;
+  }
+  
+  .retry-button {
+    background: linear-gradient(135deg, #ff0066, #ff3388);
+    color: white;
+    border: none;
+    padding: 15px 50px;
+    font-size: 24px;
+    font-weight: bold;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 5px 20px rgba(255, 0, 102, 0.5);
+    transition: all 0.3s ease;
+    margin-top: 20px;
+  }
+  
+  .retry-button:hover {
+    transform: scale(1.1);
+    box-shadow: 0 8px 30px rgba(255, 0, 102, 0.8);
+  }
+  
+  .retry-button:active {
+    transform: scale(0.95);
+  }
+  
+  /* Full-screen glow overlay - MUCH BRIGHTER */
+  #screen-glow {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 0.03s ease-out;
+    mix-blend-mode: screen;
+  }
+  
+  #screen-glow.active {
+    opacity: 1;
+  }
+  
   #loading {
     position: absolute;
     top: 50%;
@@ -26,6 +259,7 @@
     border-radius: 10px;
     border: 2px solid #00ddff;
     max-width: 400px;
+    z-index: 10;
   }
   #loading h2 {
     margin: 0 0 15px 0;
@@ -50,9 +284,13 @@
     color: #aaa;
     margin-top: 10px;
   }
+
 </style>
 </head>
 <body>
+
+<!-- Full-screen glow effect -->
+<div id="screen-glow"></div>
 
 <div id="loading">
   <h2>🎵 Analyzing Beat...</h2>
@@ -65,20 +303,189 @@
   </div>
 </div>
 
-<audio id="music" preload="auto"></audio>
-<canvas id="game" width="600" height="800"></canvas>
+<div id="game-container">
+  <!-- Background image -->
+  <img id="bg-layer" src="BG.png" alt="" style="object-fit: cover;">
+  
+  <!-- Lives display -->
+  <div id="lives-container">
+    <svg class="heart" viewBox="0 0 100 100">
+      <path d="M50,90 C50,90 10,60 10,35 C10,20 20,10 32,10 C40,10 47,15 50,22 C53,15 60,10 68,10 C80,10 90,20 90,35 C90,60 50,90 50,90 Z" 
+            fill="#ff0066" stroke="#cc0044" stroke-width="3"/>
+    </svg>
+    <svg class="heart" viewBox="0 0 100 100">
+      <path d="M50,90 C50,90 10,60 10,35 C10,20 20,10 32,10 C40,10 47,15 50,22 C53,15 60,10 68,10 C80,10 90,20 90,35 C90,60 50,90 50,90 Z" 
+            fill="#ff0066" stroke="#cc0044" stroke-width="3"/>
+    </svg>
+    <svg class="heart" viewBox="0 0 100 100">
+      <path d="M50,90 C50,90 10,60 10,35 C10,20 20,10 32,10 C40,10 47,15 50,22 C53,15 60,10 68,10 C80,10 90,20 90,35 C90,60 50,90 50,90 Z" 
+            fill="#ff0066" stroke="#cc0044" stroke-width="3"/>
+    </svg>
+  </div>
+  
+  <!-- Game Over Screen -->
+  <div id="game-over-screen">
+    <div class="game-over-content">
+      <div class="game-over-title">GAME OVER</div>
+      <div class="game-over-phase" id="phase-text"></div>
+      <button class="retry-button" onclick="restart()">RETRY</button>
+    </div>
+  </div>
+  
+  <!-- Mobile Controls -->
+  <div id="mobile-controls">
+    <div class="control-button" id="btn-left">◄</div>
+    <div class="control-button" id="btn-right">►</div>
+  </div>
+  
+  <!-- Progress Bar -->
+  <div id="progress-container">
+    <div id="progress-fill"></div>
+  </div>
+  <div id="progress-time">0:00 / 0:00</div>
+  
+  <audio id="music" preload="auto"></audio>
+  <audio id="sfx" preload="auto"></audio>
+  <canvas id="game" width="600" height="800"></canvas>
+</div>
 
 <script>
 /* ================= CORE ================= */
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const audio = document.getElementById("music");
+const sfxAudio = document.getElementById("sfx");
 const loadingDiv = document.getElementById("loading");
 const statusDiv = document.getElementById("status");
 const progressBar = document.getElementById("progress-bar");
+const screenGlow = document.getElementById("screen-glow");
+const hearts = document.querySelectorAll('.heart');
+const gameOverScreen = document.getElementById("game-over-screen");
+const phaseText = document.getElementById("phase-text");
+const mobileControls = document.getElementById("mobile-controls");
+const btnLeft = document.getElementById("btn-left");
+const btnRight = document.getElementById("btn-right");
+const progressFill = document.getElementById("progress-fill");
+const progressTime = document.getElementById("progress-time");
+
+/* ================= SFX SYSTEM ================= */
+let impactSoundsPlaying = new Set(); // Track which patterns have played sounds
+let sfxLoaded = false;
+
+// Load SFX file
+sfxAudio.src = 'sfx.mp3';
+sfxAudio.addEventListener('canplaythrough', () => {
+  sfxLoaded = true;
+  console.log("✓ SFX loaded successfully!");
+}, { once: true });
+
+sfxAudio.addEventListener('error', (e) => {
+  console.warn("⚠️ sfx.mp3 not found - SFX will be disabled");
+  sfxLoaded = false;
+}, { once: true });
+
+// Play impact sound with random pitch
+function playImpactSound() {
+  if (!sfxLoaded) return;
+  
+  try {
+    // Create a new audio element for each play (allows overlapping)
+    const sfx = new Audio('sfx.mp3');
+    
+    // Random pitch between 0.7 and 1.5 for variety
+    const randomPitch = 0.7 + Math.random() * 0.8;
+    sfx.playbackRate = randomPitch;
+    
+    // Set volume
+    sfx.volume = 0.5;
+    
+    // Play the sound
+    sfx.play().catch(err => {
+      console.warn("SFX play failed:", err);
+    });
+    
+    // Clean up after playing
+    sfx.addEventListener('ended', () => {
+      sfx.remove();
+    });
+  } catch (err) {
+    console.warn("Error playing SFX:", err);
+  }
+}
+
+/* ================= MOBILE DETECTION & CONTROLS ================= */
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                 (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+
+// Show mobile controls if on mobile device
+if (isMobile) {
+  mobileControls.classList.add('active');
+}
+
+/* ================= PROGRESS BAR ================= */
+function updateProgressBar() {
+  if (!audio || !audio.duration || isNaN(audio.duration)) return;
+  
+  const currentTime = audio.currentTime;
+  const duration = audio.duration;
+  const progress = (currentTime / duration) * 100;
+  
+  progressFill.style.width = progress + '%';
+  
+  // Format time as MM:SS
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+  
+  progressTime.textContent = `${formatTime(currentTime)} / ${formatTime(duration)}`;
+}
+
+// Mobile control state
+let mobileLeftPressed = false;
+let mobileRightPressed = false;
+
+// Touch event handlers for left button
+btnLeft.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  mobileLeftPressed = true;
+  btnLeft.classList.add('pressed');
+});
+
+btnLeft.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  mobileLeftPressed = false;
+  btnLeft.classList.remove('pressed');
+});
+
+btnLeft.addEventListener('touchcancel', (e) => {
+  e.preventDefault();
+  mobileLeftPressed = false;
+  btnLeft.classList.remove('pressed');
+});
+
+// Touch event handlers for right button
+btnRight.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  mobileRightPressed = true;
+  btnRight.classList.add('pressed');
+});
+
+btnRight.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  mobileRightPressed = false;
+  btnRight.classList.remove('pressed');
+});
+
+btnRight.addEventListener('touchcancel', (e) => {
+  e.preventDefault();
+  mobileRightPressed = false;
+  btnRight.classList.remove('pressed');
+});
 
 /* ================= SETTINGS ================= */
-const BLOCK_SPEED = 9;
+const BLOCK_SPEED = 7;
 let BEAT_TIMES = [];
 let CURRENT_BEAT_INDEX = 0;
 
@@ -97,6 +504,294 @@ const FPS = 60;
 const FRAME_TIME = 1000 / FPS;
 const START_DELAY = 1000;
 
+/* ================= LIVES SYSTEM ================= */
+let playerLives = 3;
+let isInvulnerable = false;
+let invulnerabilityTimer = 0;
+const INVULNERABILITY_DURATION = 2000; // 2 seconds of invulnerability after hit
+const FREEZE_DURATION = 2000; // 2 seconds freeze before dissolve
+const DISSOLVE_DURATION = 2000; // 2 seconds dissolve animation
+
+function loseLife() {
+  if (isInvulnerable || playerLives <= 0 || gameOver) return;
+  
+  playerLives--;
+  console.log(`Life lost! Lives remaining: ${playerLives}`);
+  
+  // Update heart display
+  const heartIndex = playerLives; // Index of the heart that should be lost
+  if (hearts[heartIndex]) {
+    hearts[heartIndex].classList.add('damage');
+    setTimeout(() => {
+      hearts[heartIndex].classList.add('lost');
+      hearts[heartIndex].classList.remove('damage');
+    }, 500);
+  }
+  
+  // Check game over
+  if (playerLives <= 0) {
+    console.log(`Death in Phase ${currentPhase}`);
+    
+    // Prevent multiple death triggers
+    if (isDeathAnimationPlaying || gameOver) return;
+    
+    // Stop music immediately
+    audio.pause();
+    
+    // Stop spawning immediately
+    allowSpawning = false;
+    
+    // Clear all blocks and lasers immediately
+    bullets = [];
+    lasers = [];
+    
+    // Start freeze period (player stays visible but frozen)
+    isFreezing = true;
+    freezeStartTime = Date.now();
+    isDeathAnimationPlaying = true;
+    deathAnimationStartTime = Date.now();
+    
+    console.log("Starting death freeze period");
+    
+    // After freeze, hide player and start dissolve animation
+    const freezeTimeout = setTimeout(() => {
+      console.log("Freeze ended, starting dissolve");
+      isFreezing = false; // Player disappears now
+      createDissolveParticles(player.x, player.y, player.width);
+    }, FREEZE_DURATION);
+    deathAnimationTimeouts.push(freezeTimeout);
+    
+    // Show game over screen after freeze + dissolve
+    const gameOverTimeout = setTimeout(() => {
+      console.log("Death animation complete, showing game over");
+      isDeathAnimationPlaying = false;
+      gameOver = true; // Set gameOver AFTER animation
+      phaseText.textContent = currentPhase === 2 ? "Phase 2" : "Phase 1";
+      gameOverScreen.classList.add('show');
+    }, FREEZE_DURATION + DISSOLVE_DURATION);
+    deathAnimationTimeouts.push(gameOverTimeout);
+    
+    return;
+  }
+  
+  // Grant invulnerability if still alive
+  isInvulnerable = true;
+  invulnerabilityTimer = Date.now();
+}
+
+/* ================= PHASE 2 SETTINGS ================= */
+const PHASE_2_TRIGGER_TIME = 60000; // 60 seconds in milliseconds
+let currentPhase = 1;
+let phase2Activated = false;
+let currentBlockSpeed = BLOCK_SPEED;
+let phase2TransitionTime = 0;
+let phase2Warning = false;
+
+/* ================= SCREEN GLOW SYSTEM ================= */
+let screenGlowIntensity = 0;
+let activeGlows = [];
+
+function triggerScreenGlow(hue) {
+  activeGlows.push({
+    hue: hue,
+    intensity: 1.0,
+    decay: 0.88  // Slower decay for more visibility
+  });
+  updateScreenGlow();
+}
+
+function updateScreenGlow() {
+  // Update all active glows
+  for (let i = activeGlows.length - 1; i >= 0; i--) {
+    activeGlows[i].intensity *= activeGlows[i].decay;
+    if (activeGlows[i].intensity < 0.01) {
+      activeGlows.splice(i, 1);
+    }
+  }
+  
+  // Calculate combined glow
+  if (activeGlows.length > 0) {
+    let totalIntensity = 0;
+    let avgHue = 0;
+    
+    activeGlows.forEach(glow => {
+      totalIntensity += glow.intensity;
+      avgHue += glow.hue * glow.intensity;
+    });
+    
+    avgHue /= totalIntensity;
+    totalIntensity = Math.min(totalIntensity * 1.5, 1.5); // Allow over 1.0 for brightness
+    
+    // Create MUCH BRIGHTER radial gradient for screen glow
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    
+    // WAY brighter with higher opacity values
+    screenGlow.style.background = `radial-gradient(circle at center, 
+      hsla(${avgHue}, 100%, 65%, ${totalIntensity * 0.7}) 0%, 
+      hsla(${avgHue}, 100%, 60%, ${totalIntensity * 0.55}) 20%,
+      hsla(${avgHue}, 100%, 55%, ${totalIntensity * 0.4}) 40%,
+      hsla(${avgHue}, 100%, 50%, ${totalIntensity * 0.25}) 60%,
+      hsla(${avgHue}, 100%, 45%, 0) 80%)`;
+    
+    screenGlow.classList.add('active');
+  } else {
+    screenGlow.classList.remove('active');
+  }
+}
+
+/* ================= PARTICLE SYSTEM ================= */
+let particles = [];
+let dissolveParticles = [];
+
+function createDissolveParticles(x, y, size) {
+  // Safety check
+  if (isNaN(x) || isNaN(y) || isNaN(size)) {
+    console.warn("Invalid particle creation parameters:", x, y, size);
+    return;
+  }
+  
+  const centerX = x + size / 2;
+  const centerY = y + size / 2;
+  const particleCount = 40; // More particles for dust effect
+  
+  console.log(`Creating ${particleCount} dissolve particles at (${centerX}, ${centerY})`);
+  
+  // Create dust particles that float upward and outward gently
+  for (let i = 0; i < particleCount; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.random() * 3; // Small initial spread
+    const speed = 0.5 + Math.random() * 1.5; // Slow, gentle movement
+    
+    dissolveParticles.push({
+      x: centerX + Math.cos(angle) * distance,
+      y: centerY + Math.sin(angle) * distance,
+      vx: Math.cos(angle) * speed * 0.5,
+      vy: -Math.abs(Math.sin(angle) * speed) - 0.5, // Float upward
+      size: 2 + Math.random() * 4,
+      life: 1.0,
+      decay: 0.003 + Math.random() * 0.003, // Very slow fade
+      rotation: Math.random() * Math.PI * 2,
+      rotationSpeed: (Math.random() - 0.5) * 0.1,
+      brightness: 0.7 + Math.random() * 0.3
+    });
+  }
+  
+  console.log(`Total dissolve particles: ${dissolveParticles.length}`);
+}
+
+function updateAndDrawDissolveParticles() {
+  for (let i = dissolveParticles.length - 1; i >= 0; i--) {
+    const p = dissolveParticles[i];
+    
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vx *= 0.98; // Slow down horizontally
+    p.vy += -0.02; // Slight upward drift (anti-gravity)
+    p.rotation += p.rotationSpeed;
+    p.life -= p.decay;
+    
+    if (p.life <= 0) {
+      dissolveParticles.splice(i, 1);
+      continue;
+    }
+    
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rotation);
+    
+    // Soft glow that fades gently
+    const glowSize = p.size * 4 * p.life;
+    const glowGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
+    glowGrad.addColorStop(0, `rgba(255, ${Math.floor(51 * p.brightness)}, ${Math.floor(136 * p.brightness)}, ${p.life * 0.6})`);
+    glowGrad.addColorStop(0.5, `rgba(255, ${Math.floor(0 * p.brightness)}, ${Math.floor(102 * p.brightness)}, ${p.life * 0.3})`);
+    glowGrad.addColorStop(1, `rgba(255, 0, 102, 0)`);
+    ctx.fillStyle = glowGrad;
+    ctx.fillRect(-glowSize, -glowSize, glowSize * 2, glowSize * 2);
+    
+    // Small dust particle
+    ctx.shadowBlur = 10 * p.life;
+    ctx.shadowColor = `rgba(255, 0, 102, ${p.life * 0.8})`;
+    
+    // Draw soft circle for dust
+    ctx.beginPath();
+    ctx.arc(0, 0, p.size * p.life * 0.7, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, ${Math.floor(102 * p.brightness * p.life)}, ${Math.floor(136 * p.brightness * p.life)}, ${p.life * 0.9})`;
+    ctx.fill();
+    
+    ctx.restore();
+  }
+}
+
+function createCollisionParticles(x, y, width, hue) {
+  const particleCount = 30;
+  const centerX = x + width / 2;
+  
+  for (let i = 0; i < particleCount; i++) {
+    const angle = (Math.PI / 180) * (Math.random() * 180 - 90); // Spread upward and sideways
+    const speed = 3 + Math.random() * 8;
+    const size = 3 + Math.random() * 6;
+    
+    particles.push({
+      x: centerX,
+      y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 2, // Add upward bias
+      size: size,
+      life: 1.0,
+      decay: 0.015 + Math.random() * 0.015,
+      hue: hue + (Math.random() * 20 - 10), // Slight hue variation
+      rotation: Math.random() * Math.PI * 2,
+      rotationSpeed: (Math.random() - 0.5) * 0.3
+    });
+  }
+}
+
+function updateAndDrawParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    
+    // Update position
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.3; // Gravity
+    p.vx *= 0.98; // Air resistance
+    p.rotation += p.rotationSpeed;
+    
+    // Update life
+    p.life -= p.decay;
+    
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+      continue;
+    }
+    
+    // Draw particle with glow
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rotation);
+    
+    // Outer glow
+    const glowSize = p.size * 3;
+    const glowGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
+    glowGrad.addColorStop(0, `hsla(${p.hue}, 100%, 70%, ${p.life * 0.6})`);
+    glowGrad.addColorStop(0.5, `hsla(${p.hue}, 100%, 60%, ${p.life * 0.3})`);
+    glowGrad.addColorStop(1, `hsla(${p.hue}, 100%, 50%, 0)`);
+    ctx.fillStyle = glowGrad;
+    ctx.fillRect(-glowSize, -glowSize, glowSize * 2, glowSize * 2);
+    
+    // Core particle
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = `hsl(${p.hue}, 100%, 60%)`;
+    ctx.fillStyle = `hsl(${p.hue}, 100%, ${60 + p.life * 20}%)`;
+    ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+    
+    ctx.restore();
+  }
+}
+
 /* ================= GAME STATE ================= */
 let bullets = [];
 let lasers = [];
@@ -105,19 +800,115 @@ let gameStarted = false;
 let analysisComplete = false;
 let allowSpawning = false;
 let startDelayTimer = null;
+let isDeathAnimationPlaying = false;
+let deathAnimationStartTime = 0;
+let isFreezing = false; // Track freeze period
+let freezeStartTime = 0;
+let deathAnimationTimeouts = []; // Track death animation timeouts
 
 let frameCount = 0;
 let scheduledBeats = new Set();
 let laneReservations = Array(LANE_COUNT).fill(0);
 let beatPulse = 0;
-let audioStarted = false; // Prevent multiple audio starts
+let audioStarted = false;
+
+/* ================= ITEM THROWING SYSTEM ================= */
+let thrownItems = [];
+let lastItemThrowTime = 0;
+const ITEM_THROW_INTERVAL = 15000; // 15 seconds
+let itemImage = new Image();
+itemImage.src = 'item.png';
+itemImage.onerror = () => {
+  console.warn("⚠️ item.png not found - items will show as placeholder");
+};
+
+function throwItem(side) {
+  // side: 'left' or 'right'
+  // Spawn INSIDE the walls, but can render outside them
+  const throwX = side === 'left' ? PLATFORM_MARGIN / 2 : canvas.width - PLATFORM_MARGIN / 2;
+  const throwY = canvas.height - 100; // Start from near bottom
+  
+  thrownItems.push({
+    x: throwX,
+    y: throwY,
+    vy: -15, // Initial upward velocity
+    rotation: 0,
+    rotationSpeed: (Math.random() - 0.5) * 0.3,
+    side: side,
+    life: 1.0,
+    gravity: 0.5
+  });
+  
+  console.log(`Item thrown from ${side} side (can render outside walls)`);
+}
+
+function throwBothSides() {
+  throwItem('left');
+  throwItem('right');
+  console.log("Items thrown from both sides!");
+}
+
+function updateAndDrawItems() {
+  // Draw items BEFORE other game elements so they appear behind walls
+  // but can extend past wall boundaries
+  ctx.save();
+  // Remove any clipping - allow drawing anywhere
+  
+  for (let i = thrownItems.length - 1; i >= 0; i--) {
+    const item = thrownItems[i];
+    
+    // Update physics
+    item.vy += item.gravity;
+    item.y += item.vy;
+    item.rotation += item.rotationSpeed;
+    
+    // Remove if off screen (below canvas)
+    if (item.y > canvas.height + 150) {
+      thrownItems.splice(i, 1);
+      continue;
+    }
+    
+    // Draw item (can render outside wall boundaries - no clipping!)
+    ctx.save();
+    ctx.translate(item.x, item.y);
+    ctx.rotate(item.rotation);
+    
+    // Draw image if loaded, otherwise draw placeholder
+    if (itemImage.complete && itemImage.naturalWidth > 0) {
+      const size = 60;
+      ctx.drawImage(itemImage, -size/2, -size/2, size, size);
+    } else {
+      // Placeholder: teal square
+      ctx.fillStyle = '#00FFCC';
+      ctx.fillRect(-30, -30, 60, 60);
+      ctx.strokeStyle = '#00CCAA';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(-30, -30, 60, 60);
+    }
+    
+    ctx.restore();
+  }
+  
+  ctx.restore();
+}
+
+function checkItemThrow() {
+  if (!gameStarted || gameOver) return;
+  
+  const currentTime = Date.now();
+  if (currentTime - lastItemThrowTime >= ITEM_THROW_INTERVAL) {
+    // Throw from BOTH sides
+    throwBothSides();
+    lastItemThrowTime = currentTime;
+  }
+}
 
 /* ================= PLAYER ================= */
 const player = {
   x: PLATFORM_X + PLATFORM_WIDTH / 2,
-  y: PLATFORM_Y - 16,
-  width: 32,
-  height: 16,
+  y: PLATFORM_Y - 20,
+  width: 24,
+  height: 24,
   vx: 0,
   vy: 0,
   accel: 1,
@@ -129,6 +920,140 @@ const player = {
 };
 const HIT_Y = PLATFORM_Y;
 
+/* ================= DRAW HEART-SHAPED PLAYER ================= */
+function drawHeartPlayer(x, y, size) {
+  // Check if we're in freeze period - show player frozen
+  if (isFreezing) {
+    const elapsed = Date.now() - freezeStartTime;
+    if (elapsed < FREEZE_DURATION) {
+      // Draw frozen player (no flashing)
+      drawHeartShape(x, y, size);
+      return;
+    }
+  }
+  
+  // Don't draw player during dissolve animation or after death
+  if (isDeathAnimationPlaying && !isFreezing) return;
+  if (gameOver && !isFreezing) return;
+  
+  const centerX = x + size / 2;
+  const centerY = y + size / 2;
+  
+  // Check invulnerability for flashing effect
+  const currentTime = Date.now();
+  if (isInvulnerable) {
+    const elapsed = currentTime - invulnerabilityTimer;
+    if (elapsed >= INVULNERABILITY_DURATION) {
+      isInvulnerable = false;
+    } else {
+      // Flash effect during invulnerability
+      const flashSpeed = 100; // milliseconds
+      if (Math.floor(elapsed / flashSpeed) % 2 === 0) {
+        return; // Skip drawing (creates flashing effect)
+      }
+    }
+  }
+  
+  drawHeartShape(x, y, size);
+}
+
+function drawHeartShape(x, y, size) {
+  const centerX = x + size / 2;
+  const centerY = y + size / 2;
+  
+  ctx.save();
+  ctx.translate(centerX, centerY);
+  
+  // Draw heart shape (Undertale soul style)
+  ctx.beginPath();
+  
+  const scale = size / 24; // Base size is 24
+  
+  // Heart shape path
+  ctx.moveTo(0, -6 * scale);
+  
+  // Left curve
+  ctx.bezierCurveTo(-12 * scale, -12 * scale, -12 * scale, -4 * scale, -12 * scale, 2 * scale);
+  ctx.bezierCurveTo(-12 * scale, 6 * scale, -8 * scale, 10 * scale, 0, 14 * scale);
+  
+  // Right curve
+  ctx.bezierCurveTo(8 * scale, 10 * scale, 12 * scale, 6 * scale, 12 * scale, 2 * scale);
+  ctx.bezierCurveTo(12 * scale, -4 * scale, 12 * scale, -12 * scale, 0, -6 * scale);
+  
+  ctx.closePath();
+  
+  // Outer glow
+  ctx.shadowBlur = 20;
+  ctx.shadowColor = '#ff0066';
+  ctx.fillStyle = '#ff0066';
+  ctx.fill();
+  
+  // Inner glow/highlight
+  ctx.shadowBlur = 10;
+  ctx.shadowColor = '#ff3388';
+  ctx.fillStyle = '#ff3388';
+  ctx.fill();
+  
+  // White border
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  
+  ctx.restore();
+}
+
+/* ================= COLOR PALETTE ================= */
+function getHueForPhase() {
+  if (currentPhase === 1) {
+    // Phase 1: Yellow/Pink/Orange palette (warm colors)
+    const colors = [
+      45,  // Yellow-orange
+      50,  // Golden yellow
+      55,  // Yellow
+      340, // Pink-red
+      350, // Hot pink
+      355, // Pink
+      30,  // Orange-yellow
+      40   // Orange
+    ];
+    return colors[Math.floor(Math.random() * colors.length)] + (Math.random() * 8 - 4);
+  } else {
+    // Phase 2: Hatsune Miku palette (cyan/turquoise/teal)
+    const mikuColors = [
+      180, // Cyan
+      175, // Turquoise
+      170, // Aqua
+      165, // Light teal
+      185, // Bright cyan
+      190, // Sky blue
+      160  // Teal
+    ];
+    return mikuColors[Math.floor(Math.random() * mikuColors.length)] + (Math.random() * 10 - 5);
+  }
+}
+
+/* ================= PHASE 2 FUNCTIONS ================= */
+function activatePhase2() {
+  if (phase2Activated) return;
+  
+  console.log("🎮 PHASE 2 ACTIVATED!");
+  phase2Activated = true;
+  currentPhase = 2;
+  phase2TransitionTime = Date.now();
+  
+  // Increase block speed by 1
+  currentBlockSpeed = BLOCK_SPEED + 1;
+  
+  console.log("Phase 2: New patterns and zigzag formations enabled!");
+}
+
+function checkPhase2Trigger() {
+  if (!phase2Activated && audio.currentTime * 1000 >= PHASE_2_TRIGGER_TIME) {
+    activatePhase2();
+  }
+}
+
+
 /* ================= BEAT DETECTION ================= */
 async function analyzeBeat() {
   try {
@@ -139,7 +1064,6 @@ async function analyzeBeat() {
     statusDiv.textContent = "Loading song...";
     progressBar.style.width = "10%";
     
-    // First, set the audio source and wait for it to be ready
     audio.src = 'song.mp3';
     console.log("Audio source set to:", audio.src);
     
@@ -175,9 +1099,7 @@ async function analyzeBeat() {
     statusDiv.textContent = "Creating audio context...";
     progressBar.style.width = "25%";
     
-    // Create audio context but DON'T connect it to the audio element
-    // We'll decode a separate copy for analysis only
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
     statusDiv.textContent = "Fetching audio data...";
     progressBar.style.width = "35%";
@@ -191,7 +1113,7 @@ async function analyzeBeat() {
     statusDiv.textContent = "Decoding audio...";
     progressBar.style.width = "55%";
     
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
     
     statusDiv.textContent = "Analyzing beats...";
     progressBar.style.width = "75%";
@@ -334,65 +1256,71 @@ const keys = {};
 window.addEventListener("keydown", e => {
   keys[e.key] = true;
   
+  // Manual item throw with key "7" - throws from BOTH sides
+  if (e.key === "7" && gameStarted && !gameOver) {
+    throwBothSides();
+  }
+  
+  // Manual Phase 2 trigger with key "8"
+  if (e.key === "8" && gameStarted && !phase2Activated) {
+    activatePhase2();
+  }
+  
   if (!gameStarted && analysisComplete && !audioStarted) {
-    console.log("🎮 Starting game!");
-    gameStarted = true;
-    audioStarted = true;
-    
-    if (startDelayTimer) {
-      clearTimeout(startDelayTimer);
-      startDelayTimer = null;
-    }
-    
-    // Start audio immediately on first keypress to satisfy browser autoplay policy
-    console.log("Attempting to unlock audio...");
-    audio.play().then(() => {
-      console.log("✓ Audio unlocked successfully!");
-      audio.pause();
-      audio.currentTime = 0;
-      console.log("Audio reset to start");
-    }).catch(err => {
-      console.log("⚠️ Initial audio unlock failed:", err);
-    });
-    
-    allowSpawning = false;
-    startDelayTimer = setTimeout(() => {
-      console.log("🎵 Starting audio playback now...");
-      console.log("Audio state before play:", {
-        paused: audio.paused,
-        currentTime: audio.currentTime,
-        duration: audio.duration,
-        readyState: audio.readyState
-      });
-      allowSpawning = true;
-      audio.play().then(() => {
-        console.log("✓ Audio playing! Current time:", audio.currentTime);
-        // Check again after a moment
-        setTimeout(() => {
-          console.log("Audio check after 500ms - Current time:", audio.currentTime, "Paused:", audio.paused);
-        }, 500);
-      }).catch(err => {
-        console.error("❌ Audio play failed:", err);
-        console.log("Audio state:", {
-          paused: audio.paused,
-          currentTime: audio.currentTime,
-          duration: audio.duration,
-          readyState: audio.readyState,
-          networkState: audio.networkState
-        });
-      });
-      startDelayTimer = null;
-    }, START_DELAY);
+    startGame();
   }
   
   if ((e.key === " " || e.key === "ArrowUp") && player.isGrounded && !gameOver) {
     player.vy = player.jumpPower;
     player.isGrounded = false;
   }
-  
-  if (gameOver && e.key.toLowerCase() === "r") restart();
 });
 window.addEventListener("keyup", e => keys[e.key] = false);
+
+// Touch support for starting game on mobile
+canvas.addEventListener('touchstart', (e) => {
+  if (!gameStarted && analysisComplete && !audioStarted) {
+    e.preventDefault();
+    startGame();
+  }
+}, { passive: false });
+
+function startGame() {
+  console.log("🎮 Starting game!");
+  gameStarted = true;
+  audioStarted = true;
+  lastItemThrowTime = Date.now(); // Initialize item timer
+  
+  if (startDelayTimer) {
+    clearTimeout(startDelayTimer);
+    startDelayTimer = null;
+  }
+  
+  console.log("Attempting to unlock audio...");
+  audio.play().then(() => {
+    console.log("✓ Audio unlocked successfully!");
+    audio.pause();
+    audio.currentTime = 0;
+    console.log("Audio reset to start");
+  }).catch(err => {
+    console.log("⚠️ Initial audio unlock failed:", err);
+  });
+  
+  allowSpawning = false;
+  startDelayTimer = setTimeout(() => {
+    console.log("🎵 Starting audio playback now...");
+    allowSpawning = true;
+    audio.play().then(() => {
+      console.log("✓ Audio playing! Current time:", audio.currentTime);
+      setTimeout(() => {
+        console.log("Audio check after 500ms - Current time:", audio.currentTime, "Paused:", audio.paused);
+      }, 500);
+    }).catch(err => {
+      console.error("❌ Audio play failed:", err);
+    });
+    startDelayTimer = null;
+  }, START_DELAY);
+}
 
 /* ================= PLATFORM ================= */
 function isOnPlatform(x, y) {
@@ -438,7 +1366,7 @@ function reserveLane(lane, hitTime) {
 function spawnLaser(lane) {
   if (!allowSpawning) return;
   
-  const hue = Math.random() < 0.5 ? 320 + Math.random() * 40 : 40 + Math.random() * 20;
+  const hue = getHueForPhase();
   lasers.push({
     lane,
     time: 900,
@@ -448,19 +1376,21 @@ function spawnLaser(lane) {
   });
 }
 
-function spawnBlock(lane) {
+function spawnBlock(lane, patternId) {
   if (!allowSpawning) return;
   
   const blockWidth = LANE_WIDTH - GAP_SIZE * 2;
   const blockHeight = blockWidth * 0.6;
-  const hue = Math.random() < 0.5 ? 320 + Math.random() * 40 : 40 + Math.random() * 20;
+  const hue = getHueForPhase();
+  
   bullets.push({
     x: PLATFORM_X + lane * LANE_WIDTH + GAP_SIZE,
     y: -blockHeight,
     w: blockWidth,
     h: blockHeight,
-    speed: BLOCK_SPEED,
-    hue: hue
+    speed: currentBlockSpeed,
+    hue: hue,
+    patternId: patternId // Track which pattern this block belongs to
   });
 }
 
@@ -594,6 +1524,117 @@ function movingWallPattern() {
   return b;
 }
 
+/* ================= PHASE 2 EXCLUSIVE PATTERNS ================= */
+
+function zigzagPattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  const direction = Math.random() > 0.5 ? 1 : -1;
+  const start = direction > 0 ? 0 : LANE_COUNT - 1;
+  
+  for (let i = 0; i < 3 && (start + i * direction >= 0) && (start + i * direction < LANE_COUNT); i++) {
+    b[start + i * direction] = true;
+  }
+  return b;
+}
+
+function snakePattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  const offset = Math.floor(Math.random() * 2);
+  
+  b[offset] = true;
+  b[offset + 2] = true;
+  if (offset + 4 < LANE_COUNT) b[offset + 4] = true;
+  
+  return b;
+}
+
+function spiralPattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  const type = Math.floor(Math.random() * 2);
+  
+  if (type === 0) {
+    b[0] = true;
+    b[LANE_COUNT - 1] = true;
+  } else {
+    const mid = Math.floor(LANE_COUNT / 2);
+    b[mid - 1] = true;
+    b[mid] = true;
+    b[mid + 1] = true;
+  }
+  
+  return b;
+}
+
+function shiftingWallPattern() {
+  const b = Array(LANE_COUNT).fill(true);
+  const gapSize = 2;
+  const gapStart = Math.floor(Math.random() * (LANE_COUNT - gapSize + 1));
+  
+  for (let i = 0; i < gapSize; i++) {
+    b[gapStart + i] = false;
+  }
+  
+  return b;
+}
+
+function wavePattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  const amplitude = 2;
+  const center = Math.floor(LANE_COUNT / 2);
+  
+  b[center] = true;
+  if (center - amplitude >= 0) b[center - amplitude] = true;
+  if (center + amplitude < LANE_COUNT) b[center + amplitude] = true;
+  
+  return b;
+}
+
+function doubleWallPattern() {
+  const b = Array(LANE_COUNT).fill(true);
+  const gapPosition = 1 + Math.floor(Math.random() * (LANE_COUNT - 2));
+  b[gapPosition] = false;
+  return b;
+}
+
+function crossPattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  b[0] = true;
+  b[2] = true;
+  b[LANE_COUNT - 1] = true;
+  return b;
+}
+
+function cornerPattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  b[0] = true;
+  b[1] = true;
+  b[LANE_COUNT - 1] = true;
+  b[LANE_COUNT - 2] = true;
+  return b;
+}
+
+function diamondPattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  const mid = Math.floor(LANE_COUNT / 2);
+  b[mid] = true;
+  if (mid > 0) b[mid - 1] = true;
+  if (mid < LANE_COUNT - 1) b[mid + 1] = true;
+  return b;
+}
+
+function splitPattern() {
+  const b = Array(LANE_COUNT).fill(false);
+  const leftSide = Math.random() > 0.5;
+  if (leftSide) {
+    b[0] = true;
+    b[1] = true;
+  } else {
+    b[LANE_COUNT - 1] = true;
+    b[LANE_COUNT - 2] = true;
+  }
+  return b;
+}
+
 /* ================= PATTERN SCHEDULING ================= */
 function schedulePatternForBeat(beatIndex) {
   if (beatIndex >= BEAT_TIMES.length || scheduledBeats.has(beatIndex)) return;
@@ -603,7 +1644,7 @@ function schedulePatternForBeat(beatIndex) {
   const blockWidth = LANE_WIDTH - GAP_SIZE * 2;
   const blockHeight = blockWidth * 0.6;
   const travelDistance = HIT_Y + blockHeight;
-  const travelFrames = travelDistance / BLOCK_SPEED;
+  const travelFrames = travelDistance / currentBlockSpeed;
   const travelTimeMs = travelFrames * FRAME_TIME;
   const targetHitTime = BEAT_TIMES[beatIndex];
   const currentTime = audio.currentTime * 1000;
@@ -630,18 +1671,43 @@ function schedulePatternForBeat(beatIndex) {
 
   if (!hasSafeGap(available)) return;
 
+  // Generate unique pattern ID for this beat
+  const patternId = `pattern_${beatIndex}_${Date.now()}`;
+
   available.forEach((spawn, lane) => {
     if (!spawn) return;
     reserveLane(lane, targetHitTime);
     setTimeout(() => {
       spawnLaser(lane);
-      spawnBlock(lane);
+      spawnBlock(lane, patternId); // Pass pattern ID to block
     }, Math.max(0, spawnDelay));
   });
 }
 
 function generatePattern() {
   const intensity = Math.min(1, beatPulse + Math.random() * 0.3);
+  
+  if (currentPhase === 2) {
+    if (intensity > 0.85) {
+      const phase2HardPatterns = [shiftingWallPattern, doubleWallPattern, fullWallPattern, movingWallPattern];
+      return phase2HardPatterns[Math.floor(Math.random() * phase2HardPatterns.length)]();
+    }
+    
+    if (intensity > 0.7) {
+      const phase2MediumPatterns = [zigzagPattern, wavePattern, snakePattern, cornerPattern, cascadePattern];
+      return phase2MediumPatterns[Math.floor(Math.random() * phase2MediumPatterns.length)]();
+    }
+    
+    if (intensity > 0.5) {
+      const phase2EasyPatterns = [spiralPattern, crossPattern, diamondPattern, splitPattern, alternatingPattern, checkerPattern];
+      return phase2EasyPatterns[Math.floor(Math.random() * phase2EasyPatterns.length)]();
+    }
+    
+    if (Math.random() < 0.2) return Array(LANE_COUNT).fill(false);
+    
+    const defaultPatterns = [spiralPattern, crossPattern, splitPattern];
+    return defaultPatterns[Math.floor(Math.random() * defaultPatterns.length)]();
+  }
   
   if (intensity > 0.85) {
     const hardPatterns = [randomWall, fullWallPattern, movingWallPattern];
@@ -681,70 +1747,84 @@ function generatePattern() {
 /* ================= DRAWING ================= */
 function drawWalls() {
   const wallWidth = PLATFORM_MARGIN;
+  
+  // LEFT WALL - Border style with dark center and lighter edges
   const leftGrad = ctx.createLinearGradient(0, 0, wallWidth, 0);
-  leftGrad.addColorStop(0, "#1a1a1a");
-  leftGrad.addColorStop(0.7, "#2a2a2a");
-  leftGrad.addColorStop(1, "#1a1a1a");
+  leftGrad.addColorStop(0, "#1a3a3a"); // Lighter teal edge (outer)
+  leftGrad.addColorStop(0.15, "#144040"); // Medium teal
+  leftGrad.addColorStop(0.3, "#0a2525"); // Dark center
+  leftGrad.addColorStop(0.7, "#0a2525"); // Dark center
+  leftGrad.addColorStop(0.85, "#144040"); // Medium teal
+  leftGrad.addColorStop(1, "#1a3a3a"); // Lighter teal edge (inner)
   ctx.fillStyle = leftGrad;
   ctx.fillRect(0, 0, wallWidth, canvas.height);
   
-  ctx.strokeStyle = "#0a0a0a";
+  // Outer edge highlight (left side of left wall)
+  ctx.strokeStyle = "rgba(0, 255, 180, 0.3)";
   ctx.lineWidth = 2;
-  for (let i = 0; i < canvas.height; i += 60) {
-    ctx.beginPath();
-    ctx.moveTo(0, i);
-    ctx.lineTo(wallWidth, i);
-    ctx.stroke();
-  }
+  ctx.beginPath();
+  ctx.moveTo(1, 0);
+  ctx.lineTo(1, canvas.height);
+  ctx.stroke();
   
-  ctx.strokeStyle = "#333";
+  // Inner edge highlight (right side of left wall)
+  ctx.strokeStyle = "rgba(0, 255, 180, 0.2)";
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(wallWidth - 1, 0);
   ctx.lineTo(wallWidth - 1, canvas.height);
   ctx.stroke();
   
+  // RIGHT WALL - Border style with dark center and lighter edges (mirrored)
   const rightGrad = ctx.createLinearGradient(canvas.width - wallWidth, 0, canvas.width, 0);
-  rightGrad.addColorStop(0, "#1a1a1a");
-  rightGrad.addColorStop(0.3, "#2a2a2a");
-  rightGrad.addColorStop(1, "#1a1a1a");
+  rightGrad.addColorStop(0, "#1a3a3a"); // Lighter teal edge (inner)
+  rightGrad.addColorStop(0.15, "#144040"); // Medium teal
+  rightGrad.addColorStop(0.3, "#0a2525"); // Dark center
+  rightGrad.addColorStop(0.7, "#0a2525"); // Dark center
+  rightGrad.addColorStop(0.85, "#144040"); // Medium teal
+  rightGrad.addColorStop(1, "#1a3a3a"); // Lighter teal edge (outer)
   ctx.fillStyle = rightGrad;
   ctx.fillRect(canvas.width - wallWidth, 0, wallWidth, canvas.height);
   
-  for (let i = 0; i < canvas.height; i += 60) {
-    ctx.beginPath();
-    ctx.moveTo(canvas.width - wallWidth, i);
-    ctx.lineTo(canvas.width, i);
-    ctx.stroke();
-  }
-  
-  ctx.strokeStyle = "#333";
+  // Inner edge highlight (left side of right wall)
+  ctx.strokeStyle = "rgba(0, 255, 180, 0.2)";
+  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(canvas.width - wallWidth + 1, 0);
   ctx.lineTo(canvas.width - wallWidth + 1, canvas.height);
   ctx.stroke();
   
+  // Outer edge highlight (right side of right wall)
+  ctx.strokeStyle = "rgba(0, 255, 180, 0.3)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(canvas.width - 1, 0);
+  ctx.lineTo(canvas.width - 1, canvas.height);
+  ctx.stroke();
+  
+  // CEILING - Border style gradient
   const ceilingHeight = 40;
   const ceilingGrad = ctx.createLinearGradient(0, 0, 0, ceilingHeight);
-  ceilingGrad.addColorStop(0, "#2a2a2a");
-  ceilingGrad.addColorStop(1, "#0a0a0a");
+  ceilingGrad.addColorStop(0, "#1a3a3a"); // Lighter teal top
+  ceilingGrad.addColorStop(0.3, "#0a2525"); // Dark center
+  ceilingGrad.addColorStop(1, "#0a0a0a"); // Black bottom
   ctx.fillStyle = ceilingGrad;
   ctx.fillRect(0, 0, canvas.width, ceilingHeight);
   
-  ctx.strokeStyle = "#1a1a1a";
+  // Top edge highlight
+  ctx.strokeStyle = "rgba(0, 255, 180, 0.3)";
   ctx.lineWidth = 2;
-  for (let i = 0; i < canvas.width; i += 80) {
-    ctx.beginPath();
-    ctx.moveTo(i, 0);
-    ctx.lineTo(i, ceilingHeight);
-    ctx.stroke();
-  }
+  ctx.beginPath();
+  ctx.moveTo(0, 1);
+  ctx.lineTo(canvas.width, 1);
+  ctx.stroke();
   
-  ctx.strokeStyle = "#333";
+  // Bottom edge highlight
+  ctx.strokeStyle = "rgba(0, 255, 180, 0.2)";
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(0, ceilingHeight);
-  ctx.lineTo(canvas.width, ceilingHeight);
+  ctx.moveTo(0, ceilingHeight - 1);
+  ctx.lineTo(canvas.width, ceilingHeight - 1);
   ctx.stroke();
 }
 
@@ -753,100 +1833,63 @@ function draw3DPlatform() {
   const topY = PLATFORM_Y;
   const bottomY = PLATFORM_Y + PLATFORM_HEIGHT;
   
-  const shadowGrad = ctx.createLinearGradient(0, bottomY, 0, bottomY + depth);
-  shadowGrad.addColorStop(0, "rgba(0,0,0,0.8)");
-  shadowGrad.addColorStop(1, "rgba(0,0,0,0.3)");
-  ctx.fillStyle = shadowGrad;
-  ctx.fillRect(PLATFORM_X - 10, bottomY, PLATFORM_WIDTH + 20, depth);
+  // NO PLATFORM BACKGROUND - removed all platform drawing
+  // Only draw lane divider lines with Miku theme
   
-  const leftBevel = ctx.createLinearGradient(PLATFORM_X - 8, 0, PLATFORM_X, 0);
-  leftBevel.addColorStop(0, "#1a1a1a");
-  leftBevel.addColorStop(1, "#2a2a2a");
-  ctx.fillStyle = leftBevel;
-  ctx.beginPath();
-  ctx.moveTo(PLATFORM_X - 8, topY + 5);
-  ctx.lineTo(PLATFORM_X, topY);
-  ctx.lineTo(PLATFORM_X, bottomY + depth);
-  ctx.lineTo(PLATFORM_X - 8, bottomY + depth + 5);
-  ctx.closePath();
-  ctx.fill();
+  const glowHue = currentPhase === 2 ? 180 : 50;
   
-  const rightBevel = ctx.createLinearGradient(PLATFORM_X + PLATFORM_WIDTH, 0, PLATFORM_X + PLATFORM_WIDTH + 8, 0);
-  rightBevel.addColorStop(0, "#2a2a2a");
-  rightBevel.addColorStop(1, "#1a1a1a");
-  ctx.fillStyle = rightBevel;
-  ctx.beginPath();
-  ctx.moveTo(PLATFORM_X + PLATFORM_WIDTH, topY);
-  ctx.lineTo(PLATFORM_X + PLATFORM_WIDTH + 8, topY + 5);
-  ctx.lineTo(PLATFORM_X + PLATFORM_WIDTH + 8, bottomY + depth + 5);
-  ctx.lineTo(PLATFORM_X + PLATFORM_WIDTH, bottomY + depth);
-  ctx.closePath();
-  ctx.fill();
+  // Draw vertical lane dividers with glow
+  ctx.save();
+  ctx.strokeStyle = `hsla(${glowHue}, 100%, 60%, 0.6)`;
+  ctx.lineWidth = 2;
+  ctx.shadowBlur = 8 + beatPulse * 12;
+  ctx.shadowColor = `hsla(${glowHue}, 100%, 60%, 0.5)`;
   
-  const frontGrad = ctx.createLinearGradient(0, topY, 0, bottomY);
-  frontGrad.addColorStop(0, "#5a5a5a");
-  frontGrad.addColorStop(0.15, "#4a4a4a");
-  frontGrad.addColorStop(0.5, "#3a3a3a");
-  frontGrad.addColorStop(0.85, "#353535");
-  frontGrad.addColorStop(1, "#2a2a2a");
-  ctx.fillStyle = frontGrad;
-  ctx.fillRect(PLATFORM_X, topY, PLATFORM_WIDTH, PLATFORM_HEIGHT);
-  
-  const pulseIntensity = beatPulse * 0.3;
-  const topHighlight = ctx.createLinearGradient(0, topY, 0, topY + 6);
-  topHighlight.addColorStop(0, `rgba(${150 + pulseIntensity * 100},${150 + pulseIntensity * 100},${150 + pulseIntensity * 100},${0.8 + pulseIntensity})`);
-  topHighlight.addColorStop(1, "rgba(150,150,150,0)");
-  ctx.fillStyle = topHighlight;
-  ctx.fillRect(PLATFORM_X, topY, PLATFORM_WIDTH, 6);
-  
-  ctx.strokeStyle = "#222";
-  ctx.lineWidth = 1;
   for (let i = 1; i < LANE_COUNT; i++) {
     const x = PLATFORM_X + i * LANE_WIDTH;
     ctx.beginPath();
-    ctx.moveTo(x, topY + 5);
-    ctx.lineTo(x, bottomY - 2);
+    ctx.moveTo(x, 40);
+    ctx.lineTo(x, PLATFORM_Y);
     ctx.stroke();
   }
   
-  ctx.strokeStyle = "#2a2a2a";
-  ctx.beginPath();
-  ctx.moveTo(PLATFORM_X + 5, topY + PLATFORM_HEIGHT / 2);
-  ctx.lineTo(PLATFORM_X + PLATFORM_WIDTH - 5, topY + PLATFORM_HEIGHT / 2);
-  ctx.stroke();
+  ctx.restore();
   
-  ctx.strokeStyle = "#1a1a1a";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(PLATFORM_X, bottomY);
-  ctx.lineTo(PLATFORM_X + PLATFORM_WIDTH, bottomY);
-  ctx.stroke();
-  
-  ctx.shadowBlur = 8 + beatPulse * 12;
-  ctx.shadowColor = `rgba(0,200,255,${0.3 + beatPulse * 0.4})`;
-  ctx.strokeStyle = `rgba(0,200,255,${0.5 + beatPulse * 0.3})`;
-  ctx.lineWidth = 1 + beatPulse * 2;
+  // Draw platform edge line (where blocks hit)
+  ctx.save();
+  ctx.strokeStyle = `hsla(${glowHue}, 100%, 60%, 0.8)`;
+  ctx.lineWidth = 3 + beatPulse * 2;
+  ctx.shadowBlur = 15 + beatPulse * 15;
+  ctx.shadowColor = `hsla(${glowHue}, 100%, 60%, 0.8)`;
   ctx.beginPath();
   ctx.moveTo(PLATFORM_X, topY);
   ctx.lineTo(PLATFORM_X + PLATFORM_WIDTH, topY);
   ctx.stroke();
-  ctx.shadowBlur = 0;
+  ctx.restore();
   
-  ctx.fillStyle = "#1a1a1a";
-  const rivetSize = 3;
-  [[PLATFORM_X + 10, topY + 8],
-   [PLATFORM_X + PLATFORM_WIDTH - 10, topY + 8],
-   [PLATFORM_X + 10, bottomY - 8],
-   [PLATFORM_X + PLATFORM_WIDTH - 10, bottomY - 8]].forEach(([x, y]) => {
-    ctx.beginPath();
-    ctx.arc(x, y, rivetSize, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#444";
-    ctx.beginPath();
-    ctx.arc(x - 1, y - 1, rivetSize * 0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#1a1a1a";
-  });
+  // INWARD GLOW - Light spilling into the lanes (same as wall theme)
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  
+  const inwardGlowIntensity = 0.15 + beatPulse * 0.25;
+  
+  // Left edge inward glow
+  const leftInwardGlow = ctx.createLinearGradient(PLATFORM_X, 0, PLATFORM_X + 100, 0);
+  leftInwardGlow.addColorStop(0, `hsla(${glowHue}, 100%, 60%, ${inwardGlowIntensity})`);
+  leftInwardGlow.addColorStop(0.5, `hsla(${glowHue}, 100%, 55%, ${inwardGlowIntensity * 0.5})`);
+  leftInwardGlow.addColorStop(1, `hsla(${glowHue}, 100%, 50%, 0)`);
+  ctx.fillStyle = leftInwardGlow;
+  ctx.fillRect(PLATFORM_X, 40, 100, PLATFORM_Y - 40);
+  
+  // Right edge inward glow
+  const rightInwardGlow = ctx.createLinearGradient(PLATFORM_X + PLATFORM_WIDTH - 100, 0, PLATFORM_X + PLATFORM_WIDTH, 0);
+  rightInwardGlow.addColorStop(0, `hsla(${glowHue}, 100%, 50%, 0)`);
+  rightInwardGlow.addColorStop(0.5, `hsla(${glowHue}, 100%, 55%, ${inwardGlowIntensity * 0.5})`);
+  rightInwardGlow.addColorStop(1, `hsla(${glowHue}, 100%, 60%, ${inwardGlowIntensity})`);
+  ctx.fillStyle = rightInwardGlow;
+  ctx.fillRect(PLATFORM_X + PLATFORM_WIDTH - 100, 40, 100, PLATFORM_Y - 40);
+  
+  ctx.restore();
 }
 
 /* ================= MAIN LOOP ================= */
@@ -860,70 +1903,93 @@ function update() {
   frameCount++;
   beatPulse *= 0.85;
 
-  if (gameStarted && !gameOver) {
+  // Always update progress bar when audio is playing
+  if (gameStarted && audio && audio.duration) {
+    updateProgressBar();
+  }
+
+  // Continue running game loop during death animation
+  if (gameStarted && (!gameOver || isDeathAnimationPlaying)) {
     const currentTime = audio.currentTime * 1000;
     
-    while (CURRENT_BEAT_INDEX < BEAT_TIMES.length && BEAT_TIMES[CURRENT_BEAT_INDEX] < currentTime) {
-      CURRENT_BEAT_INDEX++;
-      beatPulse = 1;
-    }
-    if (allowSpawning && BEAT_TIMES.length > 0) {
-      const lastBeatTime = BEAT_TIMES[CURRENT_BEAT_INDEX - 1] || 0;
-      const gap = currentTime - lastBeatTime;
-
-      if (gap > 600) {
-        BEAT_TIMES.splice(CURRENT_BEAT_INDEX, 0, currentTime);
+    // Don't update game logic during death animation
+    if (!isDeathAnimationPlaying) {
+      checkPhase2Trigger();
+      
+      while (CURRENT_BEAT_INDEX < BEAT_TIMES.length && BEAT_TIMES[CURRENT_BEAT_INDEX] < currentTime) {
+        CURRENT_BEAT_INDEX++;
         beatPulse = 1;
       }
-    }
-    
-    if (allowSpawning) {
-      const lookAheadTime = currentTime + 3000;
-      for (let i = CURRENT_BEAT_INDEX; i < BEAT_TIMES.length; i++) {
-        if (BEAT_TIMES[i] > lookAheadTime) break;
-        schedulePatternForBeat(i);
+      if (allowSpawning && BEAT_TIMES.length > 0) {
+        const lastBeatTime = BEAT_TIMES[CURRENT_BEAT_INDEX - 1] || 0;
+        const gap = currentTime - lastBeatTime;
+
+        if (gap > 600) {
+          BEAT_TIMES.splice(CURRENT_BEAT_INDEX, 0, currentTime);
+          beatPulse = 1;
+        }
       }
-    }
-    
-    if (keys["ArrowLeft"]) player.vx -= player.accel;
-    if (keys["ArrowRight"]) player.vx += player.accel;
-    player.vx *= player.friction;
-    player.vx = Math.max(-player.maxSpeed, Math.min(player.maxSpeed, player.vx));
-    player.x += player.vx;
-    
-    player.vy += player.gravity;
-    player.y += player.vy;
-    
-    if (player.y + player.height >= PLATFORM_Y && player.vy >= 0) {
-      if (isOnPlatform(player.x, player.y)) {
-        player.y = PLATFORM_Y - player.height;
-        player.vy = 0;
-        player.isGrounded = true;
+      
+      if (allowSpawning) {
+        const lookAheadTime = currentTime + 3000;
+        for (let i = CURRENT_BEAT_INDEX; i < BEAT_TIMES.length; i++) {
+          if (BEAT_TIMES[i] > lookAheadTime) break;
+          schedulePatternForBeat(i);
+        }
+      }
+      
+      if (keys["ArrowLeft"] || mobileLeftPressed) player.vx -= player.accel;
+      if (keys["ArrowRight"] || mobileRightPressed) player.vx += player.accel;
+      player.vx *= player.friction;
+      player.vx = Math.max(-player.maxSpeed, Math.min(player.maxSpeed, player.vx));
+      player.x += player.vx;
+      
+      player.vy += player.gravity;
+      player.y += player.vy;
+      
+      if (player.y + player.height >= PLATFORM_Y && player.vy >= 0) {
+        if (isOnPlatform(player.x, player.y)) {
+          player.y = PLATFORM_Y - player.height;
+          player.vy = 0;
+          player.isGrounded = true;
+        } else {
+          player.isGrounded = false;
+        }
       } else {
         player.isGrounded = false;
       }
-    } else {
-      player.isGrounded = false;
+      
+      // Check if player fell off (no animation, instant game over)
+      if (player.y > canvas.height) {
+        gameOver = true;
+        audio.pause();
+        bullets = [];
+        lasers = [];
+        
+        // Show game over screen immediately
+        phaseText.textContent = currentPhase === 2 ? "Phase 2" : "Phase 1";
+        gameOverScreen.classList.add('show');
+      }
     }
-    
-    if (player.y > canvas.height) gameOver = true;
   }
 
+  // Draw thrown items FIRST (behind everything)
+  updateAndDrawItems();
+  
   drawWalls();
   draw3DPlatform();
   
-  ctx.strokeStyle = "#1a1a1a";
-  ctx.lineWidth = 1;
-  for (let i = 1; i < LANE_COUNT; i++) {
-    const lx = PLATFORM_X + i * LANE_WIDTH;
-    ctx.beginPath();
-    ctx.moveTo(lx, 40);
-    ctx.lineTo(lx, PLATFORM_Y);
-    ctx.stroke();
-  }
-
+  // Lane dividers now drawn inside draw3DPlatform()
+  
   for (let i = lasers.length - 1; i >= 0; i--) {
     const l = lasers[i];
+    
+    // Don't update or draw lasers during death animation
+    if (isDeathAnimationPlaying) {
+      lasers.splice(i, 1);
+      continue;
+    }
+    
     l.time -= FRAME_TIME;
     const progress = 1 - l.time / l.maxTime;
     
@@ -979,18 +2045,39 @@ function update() {
   }
 
   if (gameStarted) {
-    ctx.fillStyle = "#00ddff";
-    ctx.fillRect(player.x, player.y, player.width, player.height);
-    ctx.fillStyle = "white";
-    ctx.fillRect(player.x + 8, player.y + 4, 4, 4);
-    ctx.fillRect(player.x + 20, player.y + 4, 4, 4);
+    drawHeartPlayer(player.x, player.y, player.width);
   }
 
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i];
-    b.y += b.speed;
+    
+    // Don't update bullets during death animation
+    if (!isDeathAnimationPlaying) {
+      b.y += b.speed;
 
-    if (b.y < PLATFORM_Y + PLATFORM_HEIGHT) {
+      // Check if block hit the platform and play sound once per pattern
+      if (b.y >= PLATFORM_Y && b.y < PLATFORM_Y + b.speed * 2) {
+        if (!b.glowTriggered) {
+          triggerScreenGlow(b.hue);
+          createCollisionParticles(b.x, PLATFORM_Y, b.w, b.hue);
+          b.glowTriggered = true;
+          
+          // Play impact sound only once per pattern
+          if (!impactSoundsPlaying.has(b.patternId)) {
+            impactSoundsPlaying.add(b.patternId);
+            playImpactSound();
+            
+            // Clean up old pattern IDs after a delay
+            setTimeout(() => {
+              impactSoundsPlaying.delete(b.patternId);
+            }, 500);
+          }
+        }
+      }
+    }
+
+    // Draw bullets only if not during death animation
+    if (b.y < PLATFORM_Y + PLATFORM_HEIGHT && !isDeathAnimationPlaying) {
       const blurLength = 50;
       const blurStartY = Math.max(40, b.y - blurLength);
       
@@ -1026,9 +2113,23 @@ function update() {
       ctx.shadowBlur = 0;
     }
 
-    if (gameStarted && player.x < b.x + b.w && player.x + player.width > b.x && player.y < b.y + b.h && player.y + player.height > b.y) 
-      gameOver = true;
+    // Collision detection with player - disabled during death animation
+    if (gameStarted && !isDeathAnimationPlaying && player.x < b.x + b.w && player.x + player.width > b.x && player.y < b.y + b.h && player.y + player.height > b.y) {
+      loseLife();
+      bullets.splice(i, 1);
+      continue;
+    }
+    
     if (b.y > canvas.height) bullets.splice(i, 1);
+  }
+  
+  updateAndDrawParticles();
+  updateAndDrawDissolveParticles();
+  updateScreenGlow();
+  
+  // Check for automatic item throws every frame
+  if (gameStarted && !gameOver) {
+    checkItemThrow();
   }
 
   if (!gameStarted) {
@@ -1040,19 +2141,8 @@ function update() {
     ctx.fillText("READY!", canvas.width / 2, canvas.height / 2 - 20);
     ctx.fillStyle = "white";
     ctx.font = "20px sans-serif";
-    ctx.fillText("Press any key to start", canvas.width / 2, canvas.height / 2 + 20);
-    ctx.textAlign = "left";
-  }
-
-  if (gameOver) {
-    ctx.fillStyle = "rgba(0,0,0,0.7)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "white";
-    ctx.font = "40px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
-    ctx.font = "20px sans-serif";
-    ctx.fillText("Press R to Restart", canvas.width / 2, canvas.height / 2 + 40);
+    const startText = isMobile ? "Tap to start" : "Press any key to start";
+    ctx.fillText(startText, canvas.width / 2, canvas.height / 2 + 20);
     ctx.textAlign = "left";
   }
 
@@ -1065,8 +2155,19 @@ function restart() {
     startDelayTimer = null;
   }
   
+  // Clear any pending death animation timeouts
+  deathAnimationTimeouts.forEach(timeout => clearTimeout(timeout));
+  deathAnimationTimeouts = [];
+  
+  // Hide game over screen
+  gameOverScreen.classList.remove('show');
+  
   bullets = [];
   lasers = [];
+  particles = [];
+  dissolveParticles = [];
+  thrownItems = []; // Clear thrown items
+  lastItemThrowTime = 0; // Reset item timer
   laneReservations.fill(0);
   gameOver = false;
   gameStarted = false;
@@ -1075,6 +2176,11 @@ function restart() {
   frameCount = 0;
   CURRENT_BEAT_INDEX = 0;
   scheduledBeats.clear();
+  isDeathAnimationPlaying = false;
+  deathAnimationStartTime = 0;
+  isFreezing = false;
+  freezeStartTime = 0;
+  impactSoundsPlaying.clear(); // Clear SFX tracking
   player.x = PLATFORM_X + PLATFORM_WIDTH / 2;
   player.y = PLATFORM_Y - player.height;
   player.vx = 0;
@@ -1082,6 +2188,37 @@ function restart() {
   player.isGrounded = true;
   audio.currentTime = 0;
   audio.pause();
+  
+  // Reset Phase 2 variables
+  currentPhase = 1;
+  phase2Activated = false;
+  phase2Warning = false;
+  currentBlockSpeed = BLOCK_SPEED;
+  
+  // Reset screen glow
+  activeGlows = [];
+  screenGlow.classList.remove('active');
+  
+  // Reset lives
+  playerLives = 3;
+  isInvulnerable = false;
+  invulnerabilityTimer = 0;
+  hearts.forEach(heart => {
+    heart.classList.remove('lost', 'damage');
+  });
+  
+  // Reset mobile controls
+  mobileLeftPressed = false;
+  mobileRightPressed = false;
+  btnLeft.classList.remove('pressed');
+  btnRight.classList.remove('pressed');
+  
+  // Reset progress bar
+  progressFill.style.width = '0%';
+  progressTime.textContent = '0:00 / 0:00';
+  
+  analyzeBeat();
+  
   console.log("Game restarted");
 }
 
