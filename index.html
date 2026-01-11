@@ -488,29 +488,7 @@
       padding: 20px;
     }
   }
-  @media (max-width: 768px) {
-    * {
-      -webkit-transform: translateZ(0);
-      transform: translateZ(0);
-    }
-    
-    .heart {
-      animation: none !important;
-    }
-    
-    .neon-title {
-      animation: none !important;
-    }
-    
-    #bg-layer {
-      display: none !important;
-    }
-    
-    .control-button {
-      backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
-    }
-  }
+  
   @media (max-width: 480px) {
     .neon-title {
       font-size: 45px;
@@ -686,23 +664,24 @@ setInterval(detectDevTools, 500);
 /* ================= QUALITY SETTINGS ================= */
 let isHighQuality = true;
 // Quality settings
-// Change particle limits for mobile
 const QUALITY_SETTINGS = {
   high: {
-    maxParticles: isMobile ? 15 : 100,
-    collisionParticles: isMobile ? 5 : 30,
-    dissolveParticles: isMobile ? 8 : 40,
-    laserLayers: isMobile ? 1 : 5,
-    particleDecay: isMobile ? 0.05 : 0.015,
-    enableShadows: isMobile ? false : true,
+    maxParticles: 100,
+    collisionParticles: 30,
+    dissolveParticles: 40,
+    laserLayers: 5,
+    particleDecay: 0.015,
+    screenGlowLayers: 5,
+    enableShadows: true,
     speedBonus: 0
   },
   low: {
-    maxParticles: 15,
-    collisionParticles: 5,
-    dissolveParticles: 8,
-    laserLayers: 1,
-    particleDecay: 0.08,
+    maxParticles: 40,
+    collisionParticles: 15,
+    dissolveParticles: 20,
+    laserLayers: 2,
+    particleDecay: 0.03,
+    screenGlowLayers: 2,
     enableShadows: false,
     speedBonus: 1
   }
@@ -717,20 +696,7 @@ function toggleQuality() {
 }
 /* ================= CORE ================= */
 const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d", {
-  alpha: true,
-  desynchronized: true,
-  willReadFrequently: false
-});
-
-// Lower resolution on mobile for huge performance boost
-if (isMobile) {
-  const scale = 0.7; // 70% resolution
-  canvas.style.width = '600px';
-  canvas.style.height = '800px';
-  canvas.width = 420;  // 600 * 0.7
-  canvas.height = 560; // 800 * 0.7
-}
+const ctx = canvas.getContext("2d");
 const itemsCanvas = document.getElementById("items-overlay");
 const itemsCtx = itemsCanvas.getContext("2d");
 
@@ -1104,7 +1070,7 @@ function updateAndDrawParticles() {
     ctx.globalCompositeOperation = "lighter";
     ctx.translate(p.x, p.y);
     ctx.rotate(p.rotation);
-  if (isHighQuality && !isMobile) {
+    if (isHighQuality) {
       const glowSize = p.size * 3;
       const glowGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
       glowGrad.addColorStop(0, `hsla(${p.hue}, 100%, 70%, ${p.life * 0.6})`);
@@ -1136,7 +1102,6 @@ let laneReservations = Array(LANE_COUNT).fill(0);
 let beatPulse = 0;
 let audioStarted = false;
 let victoryTriggered = false;
-let frameSkipCounter = 0;
 const getVictoryURL = () => {
    const encoded = 'aHR0cHM6Ly9naXN0LmdpdGh1YnVzZXJjb250ZW50LmNvbS9SVTNSNDE3My9kNTA5M2RlNWQzMzU0NTM0NGMxOGVjMjAwZmY5ZTdhOS9yYXcvZGJiMWU3OTE4NjNjYmI3N2YyZWI5M2ZjY2RkOTc5YWRkZjk0MjM5Zi9naXN0ZmlsZTEudHh0';
   return atob(encoded);
@@ -2008,17 +1973,6 @@ function update() {
     requestAnimationFrame(update);
     return;
   }
-  
-  // Skip frames on mobile for better performance
-  if (isMobile) {
-    frameSkipCounter++;
-    if (frameSkipCounter < 2) {
-      requestAnimationFrame(update);
-      return;
-    }
-    frameSkipCounter = 0;
-  }
-  
   // Clear canvas with transparency to show video background
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   frameCount++;
@@ -2087,24 +2041,6 @@ function update() {
       continue;
     }
     l.time -= FRAME_TIME;
-    // Mobile: Use simplified laser rendering
-    if (isMobile) {
-      const progress = 1 - l.time / l.maxTime;
-      const intensity = progress < 0.15 ? progress / 0.15 : 
-                        progress < 0.8 ? 1 : (1 - progress) / 0.2;
-      
-      const x = PLATFORM_X + l.lane * LANE_WIDTH + LANE_WIDTH / 2;
-      const blockWidth = LANE_WIDTH - GAP_SIZE * 2;
-      
-      ctx.save();
-      ctx.globalAlpha = intensity * 0.6;
-      ctx.fillStyle = `hsl(${l.hue}, 100%, 60%)`;
-      ctx.fillRect(x - blockWidth/2, 40, blockWidth, PLATFORM_Y - 40);
-      ctx.restore();
-      
-      if (l.time <= 0) lasers.splice(i, 1);
-      continue; // Skip the complex desktop rendering
-    }
     const progress = 1 - l.time / l.maxTime;
     let intensity = progress < 0.15 ? progress / 0.15 : progress < 0.8 ? 1 : (1 - progress) / 0.2;
     const beatPulseEffect = Math.sin(frameCount * (0.15 + progress * 0.25) + l.phase) * 0.5 + 0.5;
@@ -2176,14 +2112,14 @@ function update() {
         }
       }
     }
-  if (b.y < PLATFORM_Y + PLATFORM_HEIGHT && !isDeathAnimationPlaying) {
-      const blurLength = (isHighQuality && !isMobile) ? 50 : 0;
+    if (b.y < PLATFORM_Y + PLATFORM_HEIGHT && !isDeathAnimationPlaying) {
+      const blurLength = isHighQuality ? 50 : 35;
       const blurStartY = Math.max(40, b.y - blurLength);
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       const blurGrad = ctx.createLinearGradient(b.x + b.w / 2, blurStartY, b.x + b.w / 2, b.y);
-       if (isHighQuality) {
-        const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      if (isHighQuality) {
+        blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
         blurGrad.addColorStop(0.3, `hsla(${b.hue},100%,60%,0.15)`);
         blurGrad.addColorStop(0.6, `hsla(${b.hue},100%,60%,0.4)`);
         blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.7)`);
