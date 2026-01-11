@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Rhythm Dodger – Auto Beat Detection [PHASE 2]</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
   body {
     margin: 0;
@@ -16,31 +17,36 @@
     overflow: hidden;
     position: relative;
   }
-  
   #game-container {
     position: relative;
     display: inline-block;
+    max-width: 100vw;
+    max-height: 100vh;
   }
-  
   canvas { 
-    background: #000;
+    background: transparent;
     position: relative;
     z-index: 1;
     display: block;
+    max-width: 100%;
+    height: auto;
   }
-  
-  /* Background image layer */
   #bg-layer {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
     pointer-events: none;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.5s ease-in;
   }
   
-  /* Lives display - near canvas top-left */
+  #bg-layer.playing {
+    opacity: 0.3;
+  }
   #lives-container {
     position: absolute;
     top: 50px;
@@ -50,21 +56,18 @@
     z-index: 10;
     pointer-events: none;
   }
-  
-  /* Progress Bar - ELEVATED */
   #progress-container {
     position: absolute;
-    bottom: 80px; /* Moved up from 20px to 80px */
+    bottom: 80px;
     left: 20px;
     right: 20px;
-    height: 8px; /* Slightly taller for better visibility */
+    height: 8px;
     background: rgba(255, 255, 255, 0.15);
     border-radius: 4px;
     overflow: hidden;
     z-index: 10;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
   }
-  
   #progress-fill {
     height: 100%;
     width: 0%;
@@ -73,7 +76,6 @@
     transition: width 0.1s linear;
     box-shadow: 0 0 10px rgba(255, 0, 102, 0.5);
   }
-  
   #progress-time {
     position: absolute;
     bottom: 92px;
@@ -84,80 +86,87 @@
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
     z-index: 10;
     font-family: monospace;
-    display: none; /* HIDDEN */
+    display: none;
   }
-  
   .heart {
     width: 40px;
     height: 40px;
     position: relative;
     animation: heartbeat 1.5s ease-in-out infinite;
   }
-  
   .heart.lost {
     opacity: 0.2;
     animation: none;
     filter: grayscale(100%);
   }
-  
   .heart.damage {
     animation: heartDamage 0.5s ease-out;
   }
-  
   @keyframes heartbeat {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.1); }
   }
-  
   @keyframes heartDamage {
     0% { transform: scale(1.5); filter: brightness(2); }
     50% { transform: scale(0.8) rotate(-10deg); }
     100% { transform: scale(1) rotate(0deg); }
   }
-  
-  /* Mobile Controls */
   #mobile-controls {
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: none;
-    gap: 30px;
-    z-index: 10;
+  position: fixed;
+  bottom: 20px;
+  left: 0;
+  right: 0;
+  display: none;
+  justify-content: space-between;
+  padding: 0 20px;
+  z-index: 100;
   }
-  
+  #mobile-controls .control-button {
+    position: relative;
+    left: 0;
+  }
+  #mobile-controls .control-button#btn-right {
+    left: auto;
+    right: 0;
+  }
   #mobile-controls.active {
     display: flex;
   }
-  
   .control-button {
-    width: 80px;
-    height: 80px;
-    background: linear-gradient(135deg, rgba(255, 0, 102, 0.8), rgba(255, 51, 136, 0.8));
-    border: 3px solid rgba(255, 255, 255, 0.3);
+    width: 75px;
+    height: 75px;
+    background: linear-gradient(135deg, rgba(255, 0, 102, 0.25), rgba(255, 51, 136, 0.25));
+    border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 40px;
-    color: white;
+    font-size: 32px;
+    color: rgba(255, 255, 255, 0.7);
     user-select: none;
     -webkit-user-select: none;
     touch-action: manipulation;
-    box-shadow: 0 4px 15px rgba(255, 0, 102, 0.5);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    opacity: 0.8;
   }
-  
+  .control-button:active {
+    transform: scale(0.92);
+    background: linear-gradient(135deg, rgba(255, 0, 102, 0.4), rgba(255, 51, 136, 0.4));
+    color: rgba(255, 255, 255, 0.9);
+  }
   .control-button:active {
     transform: scale(0.9);
-    background: linear-gradient(135deg, rgba(255, 0, 102, 1), rgba(255, 51, 136, 1));
-    box-shadow: 0 2px 10px rgba(255, 0, 102, 0.8);
+    background: linear-gradient(135deg, rgba(255, 0, 102, 0.6), rgba(255, 51, 136, 0.6));
+    box-shadow: 0 2px 10px rgba(255, 0, 102, 0.6);
+    color: rgba(255, 255, 255, 0.9);
   }
-  
   .control-button.pressed {
     transform: scale(0.9);
-    background: linear-gradient(135deg, rgba(255, 0, 102, 1), rgba(255, 51, 136, 1));
+    background: linear-gradient(135deg, rgba(255, 0, 102, 0.4), rgba(255, 51, 136, 0.4));
+    color: rgba(255, 255, 255, 0.9);
   }
-  
   /* Game Over Screen */
   #game-over-screen {
     position: absolute;
@@ -173,26 +182,21 @@
     z-index: 100;
     animation: fadeIn 0.5s ease-out;
   }
-  
   #game-over-screen.show {
     display: flex;
   }
-  
   @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
   }
-  
   .game-over-content {
     text-align: center;
     animation: slideUp 0.5s ease-out;
   }
-  
   @keyframes slideUp {
     from { transform: translateY(50px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
   }
-  
   .game-over-title {
     font-size: 60px;
     font-weight: bold;
@@ -200,13 +204,12 @@
     margin-bottom: 20px;
     text-shadow: 0 0 20px rgba(255, 0, 102, 0.8);
   }
-  
   .game-over-phase {
     font-size: 24px;
     color: #00ddff;
     margin-bottom: 30px;
+    display: none;
   }
-  
   .retry-button {
     background: linear-gradient(135deg, #ff0066, #ff3388);
     color: white;
@@ -220,17 +223,13 @@
     transition: all 0.3s ease;
     margin-top: 20px;
   }
-  
   .retry-button:hover {
     transform: scale(1.1);
     box-shadow: 0 8px 30px rgba(255, 0, 102, 0.8);
   }
-  
   .retry-button:active {
     transform: scale(0.95);
   }
-  
-  /* Full-screen glow overlay - MUCH BRIGHTER */
   #screen-glow {
     position: fixed;
     top: 0;
@@ -243,11 +242,95 @@
     transition: opacity 0.03s ease-out;
     mix-blend-mode: screen;
   }
-  
   #screen-glow.active {
     opacity: 1;
   }
-  
+  /* Victory Screen */
+#victory-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.9);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  z-index: 100;
+  animation: fadeIn 0.5s ease-out;
+}
+#victory-screen.show {
+  display: flex;
+}
+.victory-content {
+  text-align: center;
+  animation: slideUp 0.5s ease-out;
+  max-width: 80%;
+  padding: 20px;
+}
+.victory-title {
+  font-size: 70px;
+  font-weight: bold;
+  background: linear-gradient(45deg, #ff0066, #00ddff, #00ff88);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 30px;
+  animation: victoryGlow 2s ease-in-out infinite;
+  filter: drop-shadow(0 0 30px rgba(0, 221, 255, 0.6));
+}
+@keyframes victoryGlow {
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 30px rgba(0, 221, 255, 0.6)); }
+  50% { filter: brightness(1.5) drop-shadow(0 0 50px rgba(0, 221, 255, 0.9)); }
+}
+.victory-stats {
+  font-size: 18px;
+  color: #00ff88;
+  margin: 15px 0 25px 0;
+  line-height: 1.6;
+}
+.victory-message {
+  font-size: 18px;
+  color: #ffffff;
+  line-height: 1.8;
+  margin: 20px 0;
+  padding: 25px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  border: 2px solid rgba(0, 221, 255, 0.3);
+  white-space: pre-wrap;
+  max-height: 400px;
+  overflow-y: auto;
+  box-shadow: 0 0 20px rgba(0, 221, 255, 0.2);
+}
+
+/* Mobile responsiveness for victory screen */
+@media (max-width: 768px) {
+  .victory-title {
+    font-size: 50px;
+  }
+  .victory-message {
+    font-size: 16px;
+    padding: 20px;
+    max-height: 300px;
+  }
+}
+
+@media (max-width: 480px) {
+  .victory-title {
+    font-size: 40px;
+  }
+  .victory-stats {
+    font-size: 16px;
+  }
+  .victory-message {
+    font-size: 14px;
+    padding: 15px;
+  }
+}
+
+  /* Loading Screen */
   #loading {
     position: absolute;
     top: 50%;
@@ -284,14 +367,170 @@
     color: #aaa;
     margin-top: 10px;
   }
-
+  /* Main Menu Screen */
+  #main-menu {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    z-index: 10;
+    animation: fadeIn 0.5s ease-out;
+  }
+  #main-menu.show {
+    display: flex;
+  }
+  /* Neon Title */
+  .neon-title {
+    font-size: 80px;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 60px;
+    font-family: 'Arial Black', sans-serif;
+    letter-spacing: 8px;
+    animation: neonPulse 2s ease-in-out infinite;
+  }
+  .neon-title span:nth-child(1) {
+    color: #ff0066;
+    text-shadow: 
+      0 0 10px #ff0066,
+      0 0 20px #ff0066,
+      0 0 30px #ff0066,
+      0 0 40px #ff0066,
+      0 0 70px #ff0066,
+      0 0 80px #ff0066,
+      0 0 100px #ff0066;
+  }
+  .neon-title span:nth-child(2) {
+    color: #00ddff;
+    text-shadow: 
+      0 0 10px #00ddff,
+      0 0 20px #00ddff,
+      0 0 30px #00ddff,
+      0 0 40px #00ddff,
+      0 0 70px #00ddff,
+      0 0 80px #00ddff,
+      0 0 100px #00ddff;
+  }
+  @keyframes neonPulse {
+    0%, 100% {
+      filter: brightness(1);
+    }
+    50% {
+      filter: brightness(1.3);
+    }
+  }
+  /* Menu Buttons */
+  .menu-button {
+    background: linear-gradient(135deg, #ff0066, #ff3388);
+    color: white;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    padding: 20px 80px;
+    font-size: 32px;
+    font-weight: bold;
+    border-radius: 15px;
+    cursor: pointer;
+    box-shadow: 0 5px 20px rgba(255, 0, 102, 0.5);
+    transition: all 0.3s ease;
+    margin: 15px 0;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    user-select: none;
+  }
+  .menu-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 30px rgba(255, 0, 102, 0.8);
+    border-color: rgba(255, 255, 255, 0.6);
+  }
+  .menu-button:active {
+    transform: scale(0.98);
+  }
+  .menu-button.quality-button {
+    background: linear-gradient(135deg, #00ddff, #00aacc);
+    box-shadow: 0 5px 20px rgba(0, 221, 255, 0.5);
+    font-size: 24px;
+    padding: 15px 60px;
+  }
+  .menu-button.quality-button:hover {
+    box-shadow: 0 8px 30px rgba(0, 221, 255, 0.8);
+  }
+  .quality-indicator {
+    font-size: 16px;
+    color: #00ff88;
+    margin-top: 5px;
+    font-weight: normal;
+  }
+  
+  /* Main Menu Responsive Design */
+  @media (max-width: 768px) {
+    .neon-title {
+      font-size: 60px;
+      margin-bottom: 40px;
+    }
+    
+    .menu-button {
+      padding: 15px 60px;
+      font-size: 28px;
+      margin: 10px 0;
+    }
+    
+    .menu-button.quality-button {
+      font-size: 20px;
+      padding: 12px 45px;
+    }
+    
+    #main-menu {
+      padding: 20px;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .neon-title {
+      font-size: 45px;
+      margin-bottom: 30px;
+    }
+    
+    .neon-title span {
+      letter-spacing: 3px;
+    }
+    
+    .menu-button {
+      width: 90%;
+      padding: 12px 20px;
+      font-size: 24px;
+      margin: 8px 0;
+    }
+    
+    .menu-button.quality-button {
+      font-size: 18px;
+      padding: 10px 20px;
+    }
+    
+    #game-container {
+      max-width: 100%;
+      overflow: hidden;
+    }
+    
+    canvas {
+      max-width: 100%;
+      height: auto !important;
+    }
+  }
+  
+  /* Hide lives on main menu and game over screens */
+  #main-menu.show ~ #game-container #lives-container,
+  #game-over-screen.show + #lives-container {
+    display: none;
+  }
 </style>
 </head>
 <body>
-
-<!-- Full-screen glow effect -->
 <div id="screen-glow"></div>
-
 <div id="loading">
   <h2>🎵 Analyzing Beat...</h2>
   <div id="progress">
@@ -302,12 +541,22 @@
     Please be patient
   </div>
 </div>
-
+<!-- Main Menu -->
+<div id="main-menu">
+  <div class="neon-title">
+    <span>RUEERA</span><br>
+    <span>RHYTM DODGER</span>
+  </div>
+  <button class="menu-button" id="play-button" onclick="startGameFromMenu()">
+    ▶ PLAY
+  </button>
+  <button class="menu-button quality-button" id="quality-button" onclick="toggleQuality()">
+    <div>⚙ QUALITY</div>
+    <div class="quality-indicator" id="quality-text">HIGH</div>
+  </button>
+</div>
 <div id="game-container">
-  <!-- Background image -->
-  <img id="bg-layer" src="BG.png" alt="" style="object-fit: cover;">
-  
-  <!-- Lives display -->
+  <video id="bg-layer" loop muted playsinline></video>
   <div id="lives-container">
     <svg class="heart" viewBox="0 0 100 100">
       <path d="M50,90 C50,90 10,60 10,35 C10,20 20,10 32,10 C40,10 47,15 50,22 C53,15 60,10 68,10 C80,10 90,20 90,35 C90,60 50,90 50,90 Z" 
@@ -322,37 +571,152 @@
             fill="#ff0066" stroke="#cc0044" stroke-width="3"/>
     </svg>
   </div>
-  
-  <!-- Game Over Screen -->
   <div id="game-over-screen">
     <div class="game-over-content">
-      <div class="game-over-title">GAME OVER</div>
+      <div class="game-over-title">SKILL ISSUE</div>
       <div class="game-over-phase" id="phase-text"></div>
       <button class="retry-button" onclick="restart()">RETRY</button>
     </div>
   </div>
-  
-  <!-- Mobile Controls -->
+  <!-- Victory Screen -->
+<div id="victory-screen">
+  <div class="victory-content">
+    <div class="victory-title">COOL U WIN EAT KEY NOW</div>
+    <div class="victory-stats" id="victory-stats"></div>
+    <div class="victory-message" id="victory-message">Loading your reward...</div>
+    <button class="retry-button" onclick="restart()">PLAY AGAIN</button>
+  </div>
+</div>
   <div id="mobile-controls">
     <div class="control-button" id="btn-left">◄</div>
     <div class="control-button" id="btn-right">►</div>
   </div>
-  
-  <!-- Progress Bar -->
   <div id="progress-container">
     <div id="progress-fill"></div>
   </div>
   <div id="progress-time">0:00 / 0:00</div>
-  
   <audio id="music" preload="auto"></audio>
   <audio id="sfx" preload="auto"></audio>
   <canvas id="game" width="600" height="800"></canvas>
 </div>
-
+<canvas id="items-overlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 20;"></canvas>
 <script>
+  /* ================= ANTI-INSPECT PROTECTION ================= */
+// Disable right-click
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// Disable common inspect shortcuts
+document.addEventListener('keydown', e => {
+  // F12
+  if (e.key === 'F12') {
+    e.preventDefault();
+    return false;
+  }
+  
+  // Ctrl+Shift+I
+  if (e.ctrlKey && e.shiftKey && e.key === 'I') {
+    e.preventDefault();
+    return false;
+  }
+  
+  // Ctrl+Shift+J
+  if (e.ctrlKey && e.shiftKey && e.key === 'J') {
+    e.preventDefault();
+    return false;
+  }
+  
+  // Ctrl+U (view source)
+  if (e.ctrlKey && e.key === 'u') {
+    e.preventDefault();
+    return false;
+  }
+  
+  // Ctrl+Shift+C
+  if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+    e.preventDefault();
+    return false;
+  }
+});
+// Detect if DevTools is open
+let devtoolsOpen = false;
+const detectDevTools = () => {
+  const threshold = 160;
+  const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+  const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+  
+  if (widthThreshold || heightThreshold) {
+    if (!devtoolsOpen) {
+      devtoolsOpen = true;
+      handleDevToolsOpen();
+    }
+  } else {
+    devtoolsOpen = false;
+  }
+};
+
+function handleDevToolsOpen() {
+  // Redirect to nope.html
+  window.location.href = 'nope.html';
+}
+
+// Check every 500ms
+setInterval(detectDevTools, 500);
+/* ================= QUALITY SETTINGS ================= */
+let isHighQuality = true;
+// Quality settings
+const QUALITY_SETTINGS = {
+  high: {
+    maxParticles: 100,
+    collisionParticles: 30,
+    dissolveParticles: 40,
+    laserLayers: 5,
+    particleDecay: 0.015,
+    screenGlowLayers: 5,
+    enableShadows: true,
+    speedBonus: 0
+  },
+  low: {
+    maxParticles: 40,
+    collisionParticles: 15,
+    dissolveParticles: 20,
+    laserLayers: 2,
+    particleDecay: 0.03,
+    screenGlowLayers: 2,
+    enableShadows: false,
+    speedBonus: 1
+  }
+};
+let currentQuality = QUALITY_SETTINGS.high;
+function toggleQuality() {
+  isHighQuality = !isHighQuality;
+  currentQuality = isHighQuality ? QUALITY_SETTINGS.high : QUALITY_SETTINGS.low;
+  const qualityText = document.getElementById('quality-text');
+  qualityText.textContent = isHighQuality ? 'HIGH' : 'LOW';
+  console.log(`Quality switched to: ${isHighQuality ? 'HIGH' : 'LOW'}`);
+}
 /* ================= CORE ================= */
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+const itemsCanvas = document.getElementById("items-overlay");
+const itemsCtx = itemsCanvas.getContext("2d");
+
+// Set items canvas to match viewport size
+itemsCanvas.width = window.innerWidth;
+itemsCanvas.height = window.innerHeight;
+
+// Calculate offset for items (game canvas position relative to viewport)
+function getGameCanvasOffset() {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return { 
+    offsetX: rect.left, 
+    offsetY: rect.top,
+    scaleX: rect.width / canvas.width,
+    scaleY: rect.height / canvas.height
+  };
+}
+
 const audio = document.getElementById("music");
 const sfxAudio = document.getElementById("sfx");
 const loadingDiv = document.getElementById("loading");
@@ -367,431 +731,361 @@ const btnLeft = document.getElementById("btn-left");
 const btnRight = document.getElementById("btn-right");
 const progressFill = document.getElementById("progress-fill");
 const progressTime = document.getElementById("progress-time");
+const mainMenu = document.getElementById("main-menu");
+
+/* ================= VIDEO BACKGROUND ================= */
+const bgVideo = document.getElementById("bg-layer");
+bgVideo.src = 'bg.mp4';
+bgVideo.volume = 0; // Ensure muted
+bgVideo.addEventListener('error', () => {
+  console.warn("⚠️ bg.mp4 not found - background will be black");
+});
+bgVideo.addEventListener('loadeddata', () => {
+  console.log("✓ Background video loaded successfully!");
+});
+
+/* ================= ITEM IMAGE PRELOAD ================= */
+const itemImage = new Image();
+itemImage.src = 'item.png';
+itemImage.onerror = () => {
+  console.warn("⚠️ item.png not found - items will render as colored squares");
+};
+itemImage.onload = () => {
+  console.log("✓ item.png loaded successfully!");
+};
 
 /* ================= SFX SYSTEM ================= */
-let impactSoundsPlaying = new Set(); // Track which patterns have played sounds
+let impactSoundsPlaying = new Set();
 let sfxLoaded = false;
-
-// Load SFX file
 sfxAudio.src = 'sfx.mp3';
 sfxAudio.addEventListener('canplaythrough', () => {
   sfxLoaded = true;
   console.log("✓ SFX loaded successfully!");
 }, { once: true });
-
 sfxAudio.addEventListener('error', (e) => {
   console.warn("⚠️ sfx.mp3 not found - SFX will be disabled");
   sfxLoaded = false;
 }, { once: true });
-
-// Play impact sound with random pitch
 function playImpactSound() {
   if (!sfxLoaded) return;
-  
   try {
-    // Create a new audio element for each play (allows overlapping)
     const sfx = new Audio('sfx.mp3');
-    
-    // Random pitch between 0.7 and 1.5 for variety
     const randomPitch = 0.7 + Math.random() * 0.8;
     sfx.playbackRate = randomPitch;
-    
-    // Set volume
     sfx.volume = 0.5;
-    
-    // Play the sound
-    sfx.play().catch(err => {
-      console.warn("SFX play failed:", err);
-    });
-    
-    // Clean up after playing
-    sfx.addEventListener('ended', () => {
-      sfx.remove();
-    });
-  } catch (err) {
-    console.warn("Error playing SFX:", err);
-  }
+    sfx.play().catch(err => {});
+    sfx.addEventListener('ended', () => sfx.remove());
+  } catch (err) {}
 }
-
 /* ================= MOBILE DETECTION & CONTROLS ================= */
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
                  (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
-
-// Show mobile controls if on mobile device
 if (isMobile) {
   mobileControls.classList.add('active');
 }
-
 /* ================= PROGRESS BAR ================= */
 function updateProgressBar() {
   if (!audio || !audio.duration || isNaN(audio.duration)) return;
-  
   const currentTime = audio.currentTime;
   const duration = audio.duration;
   const progress = (currentTime / duration) * 100;
-  
   progressFill.style.width = progress + '%';
-  
-  // Format time as MM:SS
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
-  
   progressTime.textContent = `${formatTime(currentTime)} / ${formatTime(duration)}`;
 }
-
-// Mobile control state
 let mobileLeftPressed = false;
 let mobileRightPressed = false;
-
-// Touch event handlers for left button
 btnLeft.addEventListener('touchstart', (e) => {
   e.preventDefault();
   mobileLeftPressed = true;
   btnLeft.classList.add('pressed');
 });
-
 btnLeft.addEventListener('touchend', (e) => {
   e.preventDefault();
   mobileLeftPressed = false;
   btnLeft.classList.remove('pressed');
 });
-
 btnLeft.addEventListener('touchcancel', (e) => {
   e.preventDefault();
   mobileLeftPressed = false;
   btnLeft.classList.remove('pressed');
 });
-
-// Touch event handlers for right button
 btnRight.addEventListener('touchstart', (e) => {
   e.preventDefault();
   mobileRightPressed = true;
   btnRight.classList.add('pressed');
 });
-
 btnRight.addEventListener('touchend', (e) => {
   e.preventDefault();
   mobileRightPressed = false;
   btnRight.classList.remove('pressed');
 });
-
 btnRight.addEventListener('touchcancel', (e) => {
   e.preventDefault();
   mobileRightPressed = false;
   btnRight.classList.remove('pressed');
 });
-
 /* ================= SETTINGS ================= */
-const BLOCK_SPEED = 7;
+const BLOCK_SPEED = 8;
 let BEAT_TIMES = [];
 let CURRENT_BEAT_INDEX = 0;
-
 const LANE_COUNT = 5;
 const GAP_SIZE = 2.5;
 const MIN_SAFE_LANES = 1;
-
 const PLATFORM_Y = 680;
 const PLATFORM_HEIGHT = 30;
 const PLATFORM_MARGIN = 80;
 const PLATFORM_WIDTH = canvas.width - PLATFORM_MARGIN * 2;
 const PLATFORM_X = PLATFORM_MARGIN;
 const LANE_WIDTH = PLATFORM_WIDTH / LANE_COUNT;
-
 const FPS = 60;
 const FRAME_TIME = 1000 / FPS;
 const START_DELAY = 1000;
-
 /* ================= LIVES SYSTEM ================= */
 let playerLives = 3;
 let isInvulnerable = false;
 let invulnerabilityTimer = 0;
-const INVULNERABILITY_DURATION = 2000; // 2 seconds of invulnerability after hit
-const FREEZE_DURATION = 2000; // 2 seconds freeze before dissolve
-const DISSOLVE_DURATION = 2000; // 2 seconds dissolve animation
+const INVULNERABILITY_DURATION = 2000;
+const FREEZE_DURATION = 2000;
+const DISSOLVE_DURATION = 2000;
+let deathAnimationTimeouts = [];
+let isDeathAnimationPlaying = false;
 
 function loseLife() {
   if (isInvulnerable || playerLives <= 0 || gameOver) return;
-  
   playerLives--;
-  console.log(`Life lost! Lives remaining: ${playerLives}`);
+  
+  // Clear any existing death animations if we're starting fresh
+  if (playerLives <= 0 && !isDeathAnimationPlaying) {
+    deathAnimationTimeouts.forEach(timeout => clearTimeout(timeout));
+    deathAnimationTimeouts = [];
+  }
   
   // Update heart display
-  const heartIndex = playerLives; // Index of the heart that should be lost
+  const heartIndex = playerLives;
   if (hearts[heartIndex]) {
     hearts[heartIndex].classList.add('damage');
     setTimeout(() => {
-      hearts[heartIndex].classList.add('lost');
-      hearts[heartIndex].classList.remove('damage');
+      if (hearts[heartIndex]) {
+        hearts[heartIndex].classList.add('lost');
+        hearts[heartIndex].classList.remove('damage');
+      }
     }, 500);
   }
   
-  // Check game over
   if (playerLives <= 0) {
-    console.log(`Death in Phase ${currentPhase}`);
-    
-    // Prevent multiple death triggers
     if (isDeathAnimationPlaying || gameOver) return;
     
-    // Stop music immediately
+    // Start death animation sequence
+    isDeathAnimationPlaying = true;
+    gameOver = false; // Not game over until animation completes
     audio.pause();
-    
-    // Stop spawning immediately
     allowSpawning = false;
     
-    // Clear all blocks and lasers immediately
+    // Clear entities
     bullets = [];
     lasers = [];
     
-    // Start freeze period (player stays visible but frozen)
+    // First freeze effect
     isFreezing = true;
     freezeStartTime = Date.now();
-    isDeathAnimationPlaying = true;
-    deathAnimationStartTime = Date.now();
     
-    console.log("Starting death freeze period");
-    
-    // After freeze, hide player and start dissolve animation
+    // Schedule the dissolve particles
     const freezeTimeout = setTimeout(() => {
-      console.log("Freeze ended, starting dissolve");
-      isFreezing = false; // Player disappears now
+      if (!isDeathAnimationPlaying) return;
+      isFreezing = false;
       createDissolveParticles(player.x, player.y, player.width);
     }, FREEZE_DURATION);
+    
     deathAnimationTimeouts.push(freezeTimeout);
     
-    // Show game over screen after freeze + dissolve
+    // Schedule the game over screen
     const gameOverTimeout = setTimeout(() => {
-      console.log("Death animation complete, showing game over");
       isDeathAnimationPlaying = false;
-      gameOver = true; // Set gameOver AFTER animation
+      isFreezing = false;
+      gameOver = true;
       phaseText.textContent = currentPhase === 2 ? "Phase 2" : "Phase 1";
       gameOverScreen.classList.add('show');
     }, FREEZE_DURATION + DISSOLVE_DURATION);
-    deathAnimationTimeouts.push(gameOverTimeout);
     
+    deathAnimationTimeouts.push(gameOverTimeout);
     return;
   }
   
-  // Grant invulnerability if still alive
+  // Invulnerability handling
   isInvulnerable = true;
   invulnerabilityTimer = Date.now();
 }
-
 /* ================= PHASE 2 SETTINGS ================= */
-const PHASE_2_TRIGGER_TIME = 60000; // 60 seconds in milliseconds
+const PHASE_2_TRIGGER_TIME = 60000;
 let currentPhase = 1;
 let phase2Activated = false;
 let currentBlockSpeed = BLOCK_SPEED;
 let phase2TransitionTime = 0;
 let phase2Warning = false;
-
 /* ================= SCREEN GLOW SYSTEM ================= */
-let screenGlowIntensity = 0;
 let activeGlows = [];
-
 function triggerScreenGlow(hue) {
   activeGlows.push({
     hue: hue,
     intensity: 1.0,
-    decay: 0.88  // Slower decay for more visibility
+    decay: 0.88
   });
   updateScreenGlow();
 }
-
 function updateScreenGlow() {
-  // Update all active glows
   for (let i = activeGlows.length - 1; i >= 0; i--) {
     activeGlows[i].intensity *= activeGlows[i].decay;
     if (activeGlows[i].intensity < 0.01) {
       activeGlows.splice(i, 1);
     }
   }
-  
-  // Calculate combined glow
   if (activeGlows.length > 0) {
     let totalIntensity = 0;
     let avgHue = 0;
-    
     activeGlows.forEach(glow => {
       totalIntensity += glow.intensity;
       avgHue += glow.hue * glow.intensity;
     });
-    
     avgHue /= totalIntensity;
-    totalIntensity = Math.min(totalIntensity * 1.5, 1.5); // Allow over 1.0 for brightness
-    
-    // Create MUCH BRIGHTER radial gradient for screen glow
-    const centerX = window.innerWidth / 2;
-    const centerY = window.innerHeight / 2;
-    
-    // WAY brighter with higher opacity values
-    screenGlow.style.background = `radial-gradient(circle at center, 
-      hsla(${avgHue}, 100%, 65%, ${totalIntensity * 0.7}) 0%, 
-      hsla(${avgHue}, 100%, 60%, ${totalIntensity * 0.55}) 20%,
-      hsla(${avgHue}, 100%, 55%, ${totalIntensity * 0.4}) 40%,
-      hsla(${avgHue}, 100%, 50%, ${totalIntensity * 0.25}) 60%,
-      hsla(${avgHue}, 100%, 45%, 0) 80%)`;
-    
+    totalIntensity = Math.min(totalIntensity * 1.5, 1.5);
+    if (isHighQuality) {
+      screenGlow.style.background = `radial-gradient(circle at center, 
+        hsla(${avgHue}, 100%, 65%, ${totalIntensity * 0.7}) 0%, 
+        hsla(${avgHue}, 100%, 60%, ${totalIntensity * 0.55}) 20%,
+        hsla(${avgHue}, 100%, 55%, ${totalIntensity * 0.4}) 40%,
+        hsla(${avgHue}, 100%, 50%, ${totalIntensity * 0.25}) 60%,
+        hsla(${avgHue}, 100%, 45%, 0) 80%)`;
+    } else {
+      screenGlow.style.background = `radial-gradient(circle at center, 
+        hsla(${avgHue}, 100%, 65%, ${totalIntensity * 0.5}) 0%, 
+        hsla(${avgHue}, 100%, 50%, 0) 60%)`;
+    }
     screenGlow.classList.add('active');
   } else {
     screenGlow.classList.remove('active');
   }
 }
-
 /* ================= PARTICLE SYSTEM ================= */
 let particles = [];
 let dissolveParticles = [];
-
 function createDissolveParticles(x, y, size) {
-  // Safety check
-  if (isNaN(x) || isNaN(y) || isNaN(size)) {
-    console.warn("Invalid particle creation parameters:", x, y, size);
-    return;
-  }
-  
+  if (isNaN(x) || isNaN(y) || isNaN(size)) return;
   const centerX = x + size / 2;
   const centerY = y + size / 2;
-  const particleCount = 40; // More particles for dust effect
-  
-  console.log(`Creating ${particleCount} dissolve particles at (${centerX}, ${centerY})`);
-  
-  // Create dust particles that float upward and outward gently
+  const particleCount = currentQuality.dissolveParticles;
   for (let i = 0; i < particleCount; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const distance = Math.random() * 3; // Small initial spread
-    const speed = 0.5 + Math.random() * 1.5; // Slow, gentle movement
-    
+    const distance = Math.random() * 3;
+    const speed = 0.5 + Math.random() * 1.5;
     dissolveParticles.push({
       x: centerX + Math.cos(angle) * distance,
       y: centerY + Math.sin(angle) * distance,
       vx: Math.cos(angle) * speed * 0.5,
-      vy: -Math.abs(Math.sin(angle) * speed) - 0.5, // Float upward
+      vy: -Math.abs(Math.sin(angle) * speed) - 0.5,
       size: 2 + Math.random() * 4,
       life: 1.0,
-      decay: 0.003 + Math.random() * 0.003, // Very slow fade
+      decay: 0.003 + Math.random() * 0.003,
       rotation: Math.random() * Math.PI * 2,
       rotationSpeed: (Math.random() - 0.5) * 0.1,
       brightness: 0.7 + Math.random() * 0.3
     });
   }
-  
-  console.log(`Total dissolve particles: ${dissolveParticles.length}`);
 }
-
 function updateAndDrawDissolveParticles() {
   for (let i = dissolveParticles.length - 1; i >= 0; i--) {
     const p = dissolveParticles[i];
-    
     p.x += p.vx;
     p.y += p.vy;
-    p.vx *= 0.98; // Slow down horizontally
-    p.vy += -0.02; // Slight upward drift (anti-gravity)
+    p.vx *= 0.98;
+    p.vy += -0.02;
     p.rotation += p.rotationSpeed;
     p.life -= p.decay;
-    
     if (p.life <= 0) {
       dissolveParticles.splice(i, 1);
       continue;
     }
-    
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     ctx.translate(p.x, p.y);
     ctx.rotate(p.rotation);
-    
-    // Soft glow that fades gently
-    const glowSize = p.size * 4 * p.life;
-    const glowGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
-    glowGrad.addColorStop(0, `rgba(255, ${Math.floor(51 * p.brightness)}, ${Math.floor(136 * p.brightness)}, ${p.life * 0.6})`);
-    glowGrad.addColorStop(0.5, `rgba(255, ${Math.floor(0 * p.brightness)}, ${Math.floor(102 * p.brightness)}, ${p.life * 0.3})`);
-    glowGrad.addColorStop(1, `rgba(255, 0, 102, 0)`);
-    ctx.fillStyle = glowGrad;
-    ctx.fillRect(-glowSize, -glowSize, glowSize * 2, glowSize * 2);
-    
-    // Small dust particle
-    ctx.shadowBlur = 10 * p.life;
-    ctx.shadowColor = `rgba(255, 0, 102, ${p.life * 0.8})`;
-    
-    // Draw soft circle for dust
+    if (isHighQuality) {
+      const glowSize = p.size * 4 * p.life;
+      const glowGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
+      glowGrad.addColorStop(0, `rgba(255, ${Math.floor(51 * p.brightness)}, ${Math.floor(136 * p.brightness)}, ${p.life * 0.6})`);
+      glowGrad.addColorStop(0.5, `rgba(255, ${Math.floor(0 * p.brightness)}, ${Math.floor(102 * p.brightness)}, ${p.life * 0.3})`);
+      glowGrad.addColorStop(1, `rgba(255, 0, 102, 0)`);
+      ctx.fillStyle = glowGrad;
+      ctx.fillRect(-glowSize, -glowSize, glowSize * 2, glowSize * 2);
+      ctx.shadowBlur = 10 * p.life;
+      ctx.shadowColor = `rgba(255, 0, 102, ${p.life * 0.8})`;
+    }
     ctx.beginPath();
     ctx.arc(0, 0, p.size * p.life * 0.7, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(255, ${Math.floor(102 * p.brightness * p.life)}, ${Math.floor(136 * p.brightness * p.life)}, ${p.life * 0.9})`;
     ctx.fill();
-    
     ctx.restore();
   }
 }
-
 function createCollisionParticles(x, y, width, hue) {
-  const particleCount = 30;
+  if (particles.length > currentQuality.maxParticles) return;
+  const particleCount = currentQuality.collisionParticles;
   const centerX = x + width / 2;
-  
   for (let i = 0; i < particleCount; i++) {
-    const angle = (Math.PI / 180) * (Math.random() * 180 - 90); // Spread upward and sideways
+    const angle = (Math.PI / 180) * (Math.random() * 180 - 90);
     const speed = 3 + Math.random() * 8;
     const size = 3 + Math.random() * 6;
-    
     particles.push({
       x: centerX,
       y: y,
       vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed - 2, // Add upward bias
+      vy: Math.sin(angle) * speed - 2,
       size: size,
       life: 1.0,
-      decay: 0.015 + Math.random() * 0.015,
-      hue: hue + (Math.random() * 20 - 10), // Slight hue variation
+      decay: currentQuality.particleDecay + Math.random() * currentQuality.particleDecay,
+      hue: hue + (Math.random() * 20 - 10),
       rotation: Math.random() * Math.PI * 2,
       rotationSpeed: (Math.random() - 0.5) * 0.3
     });
   }
 }
-
 function updateAndDrawParticles() {
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
-    
-    // Update position
     p.x += p.vx;
     p.y += p.vy;
-    p.vy += 0.3; // Gravity
-    p.vx *= 0.98; // Air resistance
+    p.vy += 0.3;
+    p.vx *= 0.98;
     p.rotation += p.rotationSpeed;
-    
-    // Update life
     p.life -= p.decay;
-    
     if (p.life <= 0) {
       particles.splice(i, 1);
       continue;
     }
-    
-    // Draw particle with glow
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     ctx.translate(p.x, p.y);
     ctx.rotate(p.rotation);
-    
-    // Outer glow
-    const glowSize = p.size * 3;
-    const glowGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
-    glowGrad.addColorStop(0, `hsla(${p.hue}, 100%, 70%, ${p.life * 0.6})`);
-    glowGrad.addColorStop(0.5, `hsla(${p.hue}, 100%, 60%, ${p.life * 0.3})`);
-    glowGrad.addColorStop(1, `hsla(${p.hue}, 100%, 50%, 0)`);
-    ctx.fillStyle = glowGrad;
-    ctx.fillRect(-glowSize, -glowSize, glowSize * 2, glowSize * 2);
-    
-    // Core particle
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = `hsl(${p.hue}, 100%, 60%)`;
+    if (isHighQuality) {
+      const glowSize = p.size * 3;
+      const glowGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
+      glowGrad.addColorStop(0, `hsla(${p.hue}, 100%, 70%, ${p.life * 0.6})`);
+      glowGrad.addColorStop(0.5, `hsla(${p.hue}, 100%, 60%, ${p.life * 0.3})`);
+      glowGrad.addColorStop(1, `hsla(${p.hue}, 100%, 50%, 0)`);
+      ctx.fillStyle = glowGrad;
+      ctx.fillRect(-glowSize, -glowSize, glowSize * 2, glowSize * 2);
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = `hsl(${p.hue}, 100%, 60%)`;
+    }
     ctx.fillStyle = `hsl(${p.hue}, 100%, ${60 + p.life * 20}%)`;
     ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
-    
     ctx.restore();
   }
 }
-
 /* ================= GAME STATE ================= */
 let bullets = [];
 let lasers = [];
@@ -800,109 +1094,86 @@ let gameStarted = false;
 let analysisComplete = false;
 let allowSpawning = false;
 let startDelayTimer = null;
-let isDeathAnimationPlaying = false;
-let deathAnimationStartTime = 0;
-let isFreezing = false; // Track freeze period
+let isFreezing = false;
 let freezeStartTime = 0;
-let deathAnimationTimeouts = []; // Track death animation timeouts
-
 let frameCount = 0;
 let scheduledBeats = new Set();
 let laneReservations = Array(LANE_COUNT).fill(0);
 let beatPulse = 0;
 let audioStarted = false;
-
+let victoryTriggered = false;
+const getVictoryURL = () => {
+   const encoded = 'aHR0cHM6Ly9naXN0LmdpdGh1YnVzZXJjb250ZW50LmNvbS9XaW5kR2F6ZS81NDQ0M2U2MjY1OTAxNWQzNjlmYTY1OTIzMzhlMWY5ZC9yYXcvMzJlZTcxYTQwMTBjNjI0ZDdmZWI5YjM4NWIzMWUzNDlhNDkyNjNlMy9naXN0ZmlsZTEudHh0';
+  return atob(encoded);
+};
 /* ================= ITEM THROWING SYSTEM ================= */
 let thrownItems = [];
 let lastItemThrowTime = 0;
-const ITEM_THROW_INTERVAL = 15000; // 15 seconds
-let itemImage = new Image();
-itemImage.src = 'item.png';
-itemImage.onerror = () => {
-  console.warn("⚠️ item.png not found - items will show as placeholder");
-};
+const ITEM_THROW_INTERVAL = 10000; 
 
 function throwItem(side) {
-  // side: 'left' or 'right'
-  // Spawn INSIDE the walls, but can render outside them
   const throwX = side === 'left' ? PLATFORM_MARGIN / 2 : canvas.width - PLATFORM_MARGIN / 2;
-  const throwY = canvas.height - 100; // Start from near bottom
-  
+  const throwY = canvas.height - 100;
   thrownItems.push({
     x: throwX,
     y: throwY,
-    vy: -15, // Initial upward velocity
+    vy: -15,
     rotation: 0,
     rotationSpeed: (Math.random() - 0.5) * 0.3,
     side: side,
     life: 1.0,
     gravity: 0.5
   });
-  
-  console.log(`Item thrown from ${side} side (can render outside walls)`);
 }
-
 function throwBothSides() {
   throwItem('left');
   throwItem('right');
-  console.log("Items thrown from both sides!");
 }
-
 function updateAndDrawItems() {
-  // Draw items BEFORE other game elements so they appear behind walls
-  // but can extend past wall boundaries
-  ctx.save();
-  // Remove any clipping - allow drawing anywhere
+  // Clear the items overlay canvas
+  itemsCtx.clearRect(0, 0, itemsCanvas.width, itemsCanvas.height);
+  
+  // Get game canvas position and scale
+  const offset = getGameCanvasOffset();
   
   for (let i = thrownItems.length - 1; i >= 0; i--) {
     const item = thrownItems[i];
+    if (!item) continue; // Safety check
     
-    // Update physics
     item.vy += item.gravity;
     item.y += item.vy;
     item.rotation += item.rotationSpeed;
     
-    // Remove if off screen (below canvas)
     if (item.y > canvas.height + 150) {
       thrownItems.splice(i, 1);
       continue;
     }
     
-    // Draw item (can render outside wall boundaries - no clipping!)
-    ctx.save();
-    ctx.translate(item.x, item.y);
-    ctx.rotate(item.rotation);
+    // Convert game canvas coordinates to viewport coordinates
+    const screenX = offset.offsetX + (item.x * offset.scaleX);
+    const screenY = offset.offsetY + (item.y * offset.scaleY);
+    const screenSize = 180 * offset.scaleX;
     
-    // Draw image if loaded, otherwise draw placeholder
+    itemsCtx.save();
+    itemsCtx.translate(screenX, screenY);
+    itemsCtx.rotate(item.rotation);
     if (itemImage.complete && itemImage.naturalWidth > 0) {
-      const size = 60;
-      ctx.drawImage(itemImage, -size/2, -size/2, size, size);
+      itemsCtx.drawImage(itemImage, -screenSize/2, -screenSize/2, screenSize, screenSize);
     } else {
-      // Placeholder: teal square
-      ctx.fillStyle = '#00FFCC';
-      ctx.fillRect(-30, -30, 60, 60);
-      ctx.strokeStyle = '#00CCAA';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(-30, -30, 60, 60);
+      itemsCtx.fillStyle = '#00FFCC';
+      itemsCtx.fillRect(-screenSize/2, -screenSize/2, screenSize, screenSize);
     }
-    
-    ctx.restore();
+    itemsCtx.restore();
   }
-  
-  ctx.restore();
 }
-
 function checkItemThrow() {
-  if (!gameStarted || gameOver) return;
-  
+  if (!gameStarted || gameOver || isDeathAnimationPlaying) return;
   const currentTime = Date.now();
   if (currentTime - lastItemThrowTime >= ITEM_THROW_INTERVAL) {
-    // Throw from BOTH sides
     throwBothSides();
     lastItemThrowTime = currentTime;
   }
 }
-
 /* ================= PLAYER ================= */
 const player = {
   x: PLATFORM_X + PLATFORM_WIDTH / 2,
@@ -911,227 +1182,185 @@ const player = {
   height: 24,
   vx: 0,
   vy: 0,
-  accel: 1,
+  accel: 1.3,
   friction: 0.88,
-  maxSpeed: 10,
+  maxSpeed: 12,
   gravity: 0.6,
   jumpPower: -12,
   isGrounded: false
 };
 const HIT_Y = PLATFORM_Y;
-
 /* ================= DRAW HEART-SHAPED PLAYER ================= */
 function drawHeartPlayer(x, y, size) {
-  // Check if we're in freeze period - show player frozen
   if (isFreezing) {
     const elapsed = Date.now() - freezeStartTime;
     if (elapsed < FREEZE_DURATION) {
-      // Draw frozen player (no flashing)
       drawHeartShape(x, y, size);
       return;
     }
   }
-  
-  // Don't draw player during dissolve animation or after death
   if (isDeathAnimationPlaying && !isFreezing) return;
   if (gameOver && !isFreezing) return;
-  
-  const centerX = x + size / 2;
-  const centerY = y + size / 2;
-  
-  // Check invulnerability for flashing effect
   const currentTime = Date.now();
   if (isInvulnerable) {
     const elapsed = currentTime - invulnerabilityTimer;
     if (elapsed >= INVULNERABILITY_DURATION) {
       isInvulnerable = false;
     } else {
-      // Flash effect during invulnerability
-      const flashSpeed = 100; // milliseconds
+      const flashSpeed = 100;
       if (Math.floor(elapsed / flashSpeed) % 2 === 0) {
-        return; // Skip drawing (creates flashing effect)
+        return;
       }
     }
   }
-  
   drawHeartShape(x, y, size);
 }
-
 function drawHeartShape(x, y, size) {
   const centerX = x + size / 2;
   const centerY = y + size / 2;
-  
   ctx.save();
   ctx.translate(centerX, centerY);
-  
-  // Draw heart shape (Undertale soul style)
   ctx.beginPath();
-  
-  const scale = size / 24; // Base size is 24
-  
-  // Heart shape path
+  const scale = size / 24;
   ctx.moveTo(0, -6 * scale);
-  
-  // Left curve
   ctx.bezierCurveTo(-12 * scale, -12 * scale, -12 * scale, -4 * scale, -12 * scale, 2 * scale);
   ctx.bezierCurveTo(-12 * scale, 6 * scale, -8 * scale, 10 * scale, 0, 14 * scale);
-  
-  // Right curve
   ctx.bezierCurveTo(8 * scale, 10 * scale, 12 * scale, 6 * scale, 12 * scale, 2 * scale);
   ctx.bezierCurveTo(12 * scale, -4 * scale, 12 * scale, -12 * scale, 0, -6 * scale);
-  
   ctx.closePath();
-  
-  // Outer glow
-  ctx.shadowBlur = 20;
-  ctx.shadowColor = '#ff0066';
+  if (currentQuality.enableShadows) {
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ff0066';
+  }
   ctx.fillStyle = '#ff0066';
   ctx.fill();
-  
-  // Inner glow/highlight
-  ctx.shadowBlur = 10;
-  ctx.shadowColor = '#ff3388';
+  if (currentQuality.enableShadows) {
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#ff3388';
+  }
   ctx.fillStyle = '#ff3388';
   ctx.fill();
-  
-  // White border
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 2;
   ctx.stroke();
-  
+  ctx.shadowBlur = 0;
   ctx.restore();
 }
-
 /* ================= COLOR PALETTE ================= */
 function getHueForPhase() {
   if (currentPhase === 1) {
-    // Phase 1: Yellow/Pink/Orange palette (warm colors)
-    const colors = [
-      45,  // Yellow-orange
-      50,  // Golden yellow
-      55,  // Yellow
-      340, // Pink-red
-      350, // Hot pink
-      355, // Pink
-      30,  // Orange-yellow
-      40   // Orange
-    ];
+    const colors = [45, 50, 55, 340, 350, 355, 30, 40];
     return colors[Math.floor(Math.random() * colors.length)] + (Math.random() * 8 - 4);
   } else {
-    // Phase 2: Hatsune Miku palette (cyan/turquoise/teal)
-    const mikuColors = [
-      180, // Cyan
-      175, // Turquoise
-      170, // Aqua
-      165, // Light teal
-      185, // Bright cyan
-      190, // Sky blue
-      160  // Teal
-    ];
+    const mikuColors = [180, 175, 170, 165, 185, 190, 160];
     return mikuColors[Math.floor(Math.random() * mikuColors.length)] + (Math.random() * 10 - 5);
   }
 }
-
 /* ================= PHASE 2 FUNCTIONS ================= */
 function activatePhase2() {
   if (phase2Activated) return;
-  
-  console.log("🎮 PHASE 2 ACTIVATED!");
   phase2Activated = true;
   currentPhase = 2;
   phase2TransitionTime = Date.now();
-  
-  // Increase block speed by 1
   currentBlockSpeed = BLOCK_SPEED + 1;
-  
-  console.log("Phase 2: New patterns and zigzag formations enabled!");
 }
-
 function checkPhase2Trigger() {
   if (!phase2Activated && audio.currentTime * 1000 >= PHASE_2_TRIGGER_TIME) {
     activatePhase2();
   }
 }
+/* ================= VICTORY DETECTION ================= */
+function checkVictoryCondition() {
+  if (victoryTriggered || !gameStarted || gameOver || isDeathAnimationPlaying) return;
+  
+  // Check if song is almost finished (within 0.5 seconds of end) and player is alive
+  if (audio.currentTime >= audio.duration - 0.5 && playerLives > 0) {
+    victoryTriggered = true;
+    triggerVictory();
+  }
+}
 
+async function triggerVictory() {
+  gameOver = true;
+  audio.pause();
+  allowSpawning = false;
+  
+  // Clear game entities
+  bullets = [];
+  lasers = [];
+  
+  const victoryScreen = document.getElementById('victory-screen');
+  const messageDiv = document.getElementById('victory-message');
+  const statsDiv = document.getElementById('victory-stats');
+  
+  // Show victory screen
+  victoryScreen.classList.add('show');
+  
+    statsDiv.innerHTML = `
+     ❤️ Lives Remaining: <strong>${playerLives}/3</strong>
+  `;
+  
+  // Fetch victory message from external URL
+  try {
+    const url = getVictoryURL();
+    const response = await fetch(url);
+    
+    if (!response.ok) throw new Error('Failed to load message');
+    
+    const text = await response.text();
+    messageDiv.textContent = text;
+    
+    // Animate the message
+    messageDiv.style.animation = 'slideUp 0.8s ease-out';
+  } catch (error) {
+    console.error('Error fetching victory message:', error);
+    // Fallback message if fetch fails
+    messageDiv.textContent = `🎊 Congratulations! 🎊
 
+You've completed the Rhythm Dodger challenge!
+
+Your reflexes are truly impressive!
+Thank you for playing!`;
+  }
+}
 /* ================= BEAT DETECTION ================= */
 async function analyzeBeat() {
   try {
-    console.log("Starting beat analysis...");
-    console.log("Current URL:", window.location.href);
-    console.log("Song URL:", window.location.origin + '/song.mp3');
-    
     statusDiv.textContent = "Loading song...";
     progressBar.style.width = "10%";
-    
     audio.src = 'song.mp3';
-    console.log("Audio source set to:", audio.src);
-    
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        reject(new Error('Audio loading timeout - check if song.mp3 exists in your project'));
+        reject(new Error('Audio loading timeout'));
       }, 10000);
-      
       audio.addEventListener('canplaythrough', () => {
         clearTimeout(timeout);
-        console.log("✓ Audio loaded successfully!");
-        console.log("Audio duration:", audio.duration, "seconds");
         resolve();
       }, { once: true });
-      
       audio.addEventListener('error', (e) => {
         clearTimeout(timeout);
-        let errorMsg = 'Failed to load song.mp3';
-        if (audio.error) {
-          switch(audio.error.code) {
-            case 1: errorMsg = 'Loading aborted'; break;
-            case 2: errorMsg = 'Network error loading song.mp3'; break;
-            case 3: errorMsg = 'Decoding error - invalid audio format'; break;
-            case 4: errorMsg = 'song.mp3 not found or not supported'; break;
-          }
-        }
-        reject(new Error(errorMsg));
+        reject(new Error('Failed to load song.mp3'));
       }, { once: true });
-      
       audio.load();
     });
-    
     statusDiv.textContent = "Creating audio context...";
     progressBar.style.width = "25%";
-    
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
     statusDiv.textContent = "Fetching audio data...";
     progressBar.style.width = "35%";
-    
     const response = await fetch('song.mp3');
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: song.mp3 not found on server`);
-    }
     const arrayBuffer = await response.arrayBuffer();
-    
     statusDiv.textContent = "Decoding audio...";
     progressBar.style.width = "55%";
-    
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    
     statusDiv.textContent = "Analyzing beats...";
     progressBar.style.width = "75%";
-    
     const channelData = audioBuffer.getChannelData(0);
     const sampleRate = audioBuffer.sampleRate;
-    
     const beats = detectBeats(channelData, sampleRate);
-    
-    if (beats.length === 0) {
-      throw new Error('No beats detected in audio file');
-    }
-    
     statusDiv.textContent = `Found ${beats.length} beats!`;
     progressBar.style.width = "90%";
-    
     BEAT_TIMES = beats;
-    
     if (beats.length > 1) {
       const intervals = [];
       for (let i = 1; i < Math.min(beats.length, 50); i++) {
@@ -1139,38 +1368,25 @@ async function analyzeBeat() {
       }
       const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
       const bpm = Math.round(60000 / avgInterval);
-      
       statusDiv.textContent = `Ready! (~${bpm} BPM, ${beats.length} beats)`;
     }
-    
     progressBar.style.width = "100%";
-    
     setTimeout(() => {
       analysisComplete = true;
       loadingDiv.style.display = "none";
+      mainMenu.classList.add('show'); // Show main menu instead
     }, 800);
-    
   } catch (error) {
     console.error("Beat detection error:", error);
-    statusDiv.innerHTML = `<span style='color:#ff4444'>❌ ${error.message}</span><br><br>` +
-                          `<span style='font-size:12px; color:#aaa'>Deployment Checklist:<br>` +
-                          `✓ Is song.mp3 in your project root?<br>` +
-                          `✓ Is it committed to git?<br>` +
-                          `✓ Did you push to your repo?<br>` +
-                          `✓ Check Vercel deployment logs<br><br>` +
-                          `Current URL: ${window.location.href}<br>` +
-                          `Trying to load: ${window.location.origin}/song.mp3</span>`;
+    statusDiv.innerHTML = `<span style='color:#ff4444'>❌ ${error.message}</span>`;
     progressBar.style.width = "0%";
   }
 }
-
 function detectBeats(channelData, sampleRate) {
   const beats = [];
-  
   const windowSize = Math.floor(sampleRate * 0.05);
   const hopSize = Math.floor(windowSize / 2);
   const energyThreshold = 1.3;
-  
   const energies = [];
   for (let i = 0; i < channelData.length - windowSize; i += hopSize) {
     let energy = 0;
@@ -1180,64 +1396,49 @@ function detectBeats(channelData, sampleRate) {
     }
     energies.push(energy / windowSize);
   }
-  
   const historySize = 43;
-  
   for (let i = historySize; i < energies.length; i++) {
     const currentEnergy = energies[i];
-    
     let avgEnergy = 0;
     for (let j = i - historySize; j < i; j++) {
       avgEnergy += energies[j];
     }
     avgEnergy /= historySize;
-    
     if (currentEnergy > avgEnergy * energyThreshold) {
       const timeMs = (i * hopSize / sampleRate) * 1000;
-      
       if (beats.length === 0 || timeMs - beats[beats.length - 1] > 200) {
         beats.push(timeMs);
       }
     }
   }
-  
   if (beats.length > 4) {
     return refineBeatTiming(beats);
   }
-  
   return beats;
 }
-
 function refineBeatTiming(rawBeats) {
   const intervals = [];
   for (let i = 1; i < rawBeats.length; i++) {
     intervals.push(rawBeats[i] - rawBeats[i-1]);
   }
-  
   const histogram = {};
   const tolerance = 50;
-  
   intervals.forEach(interval => {
     const bucket = Math.round(interval / tolerance) * tolerance;
     histogram[bucket] = (histogram[bucket] || 0) + 1;
   });
-  
   let maxCount = 0;
   let dominantInterval = 500;
-  
   for (const [interval, count] of Object.entries(histogram)) {
     if (count > maxCount) {
       maxCount = count;
       dominantInterval = parseFloat(interval);
     }
   }
-  
   const refinedBeats = [rawBeats[0]];
   let expectedTime = rawBeats[0] + dominantInterval;
-  
   for (let i = 1; i < rawBeats.length; i++) {
     const currentBeat = rawBeats[i];
-    
     if (Math.abs(currentBeat - expectedTime) < tolerance) {
       refinedBeats.push(expectedTime);
       expectedTime += dominantInterval;
@@ -1247,85 +1448,55 @@ function refineBeatTiming(rawBeats) {
       i--;
     }
   }
-  
   return refinedBeats;
 }
-
 /* ================= INPUT ================= */
 const keys = {};
 window.addEventListener("keydown", e => {
   keys[e.key] = true;
-  
-  // Manual item throw with key "7" - throws from BOTH sides
-  if (e.key === "7" && gameStarted && !gameOver) {
+  if (e.key === "7" && gameStarted && !gameOver && !isDeathAnimationPlaying) {
     throwBothSides();
+    lastItemThrowTime = Date.now(); // Reset timer when manually triggered
   }
-  
-  // Manual Phase 2 trigger with key "8"
-  if (e.key === "8" && gameStarted && !phase2Activated) {
-    activatePhase2();
-  }
-  
-  if (!gameStarted && analysisComplete && !audioStarted) {
-    startGame();
-  }
-  
   if ((e.key === " " || e.key === "ArrowUp") && player.isGrounded && !gameOver) {
     player.vy = player.jumpPower;
     player.isGrounded = false;
   }
 });
 window.addEventListener("keyup", e => keys[e.key] = false);
-
-// Touch support for starting game on mobile
-canvas.addEventListener('touchstart', (e) => {
-  if (!gameStarted && analysisComplete && !audioStarted) {
-    e.preventDefault();
-    startGame();
-  }
-}, { passive: false });
-
+function startGameFromMenu() {
+  mainMenu.classList.remove('show');
+  startGame();
+}
 function startGame() {
-  console.log("🎮 Starting game!");
   gameStarted = true;
   audioStarted = true;
-  lastItemThrowTime = Date.now(); // Initialize item timer
-  
+  lastItemThrowTime = Date.now();
+  currentBlockSpeed = BLOCK_SPEED + currentQuality.speedBonus;
   if (startDelayTimer) {
     clearTimeout(startDelayTimer);
     startDelayTimer = null;
   }
-  
-  console.log("Attempting to unlock audio...");
   audio.play().then(() => {
-    console.log("✓ Audio unlocked successfully!");
     audio.pause();
     audio.currentTime = 0;
-    console.log("Audio reset to start");
-  }).catch(err => {
-    console.log("⚠️ Initial audio unlock failed:", err);
-  });
-  
+  }).catch(err => {});
   allowSpawning = false;
   startDelayTimer = setTimeout(() => {
-    console.log("🎵 Starting audio playback now...");
     allowSpawning = true;
-    audio.play().then(() => {
-      console.log("✓ Audio playing! Current time:", audio.currentTime);
-      setTimeout(() => {
-        console.log("Audio check after 500ms - Current time:", audio.currentTime, "Paused:", audio.paused);
-      }, 500);
+    audio.play().catch(err => {});
+    // Start video at the same time as the song and fade it in
+    bgVideo.play().then(() => {
+      bgVideo.classList.add('playing');
     }).catch(err => {
-      console.error("❌ Audio play failed:", err);
+      console.warn("Video playback failed:", err);
     });
     startDelayTimer = null;
   }, START_DELAY);
 }
-
 /* ================= PLATFORM ================= */
 function isOnPlatform(x, y) {
   const playerBottom = y + player.height;
-  
   if (playerBottom >= PLATFORM_Y && playerBottom <= PLATFORM_Y + PLATFORM_HEIGHT) {
     if (x + player.width > PLATFORM_X && x < PLATFORM_X + PLATFORM_WIDTH) {
       return true;
@@ -1333,7 +1504,6 @@ function isOnPlatform(x, y) {
   }
   return false;
 }
-
 /* ================= SAFETY ================= */
 function hasSafeGap(blocked) {
   let free = 0;
@@ -1345,7 +1515,6 @@ function hasSafeGap(blocked) {
   }
   return false;
 }
-
 function isLaneAvailable(lane, hitTime) {
   const occ = 400;
   const buffer = 300;
@@ -1357,15 +1526,12 @@ function isLaneAvailable(lane, hitTime) {
   const exEnd = existing + occ / 2 + buffer;
   return newEnd < exStart || newStart > exEnd;
 }
-
 function reserveLane(lane, hitTime) {
   laneReservations[lane] = hitTime;
 }
-
 /* ================= SPAWN ================= */
 function spawnLaser(lane) {
   if (!allowSpawning) return;
-  
   const hue = getHueForPhase();
   lasers.push({
     lane,
@@ -1375,14 +1541,11 @@ function spawnLaser(lane) {
     phase: Math.random() * Math.PI * 2
   });
 }
-
 function spawnBlock(lane, patternId) {
   if (!allowSpawning) return;
-  
   const blockWidth = LANE_WIDTH - GAP_SIZE * 2;
   const blockHeight = blockWidth * 0.6;
   const hue = getHueForPhase();
-  
   bullets.push({
     x: PLATFORM_X + lane * LANE_WIDTH + GAP_SIZE,
     y: -blockHeight,
@@ -1390,31 +1553,26 @@ function spawnBlock(lane, patternId) {
     h: blockHeight,
     speed: currentBlockSpeed,
     hue: hue,
-    patternId: patternId // Track which pattern this block belongs to
+    patternId: patternId
   });
 }
-
 /* ================= PATTERN FUNCTIONS ================= */
-
 function randomSingle() {
   const b = Array(LANE_COUNT).fill(false);
   b[Math.floor(Math.random() * LANE_COUNT)] = true;
   return b;
 }
-
 function randomMerged() {
   const b = Array(LANE_COUNT).fill(false);
   const s = Math.floor(Math.random() * (LANE_COUNT - 1));
   b[s] = b[s + 1] = true;
   return b;
 }
-
 function randomBurst() {
   const b = Array(LANE_COUNT).fill(false);
   for (let i = 0; i < 3; i++) b[Math.floor(Math.random() * LANE_COUNT)] = true;
   return b;
 }
-
 function randomWall() {
   const b = Array(LANE_COUNT).fill(true);
   const safe = Math.floor(Math.random() * LANE_COUNT);
@@ -1423,14 +1581,12 @@ function randomWall() {
   else b[safe + 1] = false;
   return b;
 }
-
 function edgePattern() {
   const b = Array(LANE_COUNT).fill(false);
   b[0] = true;
   b[LANE_COUNT - 1] = true;
   return b;
 }
-
 function centerPattern() {
   const b = Array(LANE_COUNT).fill(false);
   const mid = Math.floor(LANE_COUNT / 2);
@@ -1439,7 +1595,6 @@ function centerPattern() {
   if (mid < LANE_COUNT - 1) b[mid + 1] = true;
   return b;
 }
-
 function alternatingPattern() {
   const b = Array(LANE_COUNT).fill(false);
   const startOffset = Math.random() > 0.5 ? 0 : 1;
@@ -1450,7 +1605,6 @@ function alternatingPattern() {
   b[safeLane] = false;
   return b;
 }
-
 function cascadePattern() {
   const b = Array(LANE_COUNT).fill(false);
   const start = Math.floor(Math.random() * (LANE_COUNT - 2));
@@ -1459,7 +1613,6 @@ function cascadePattern() {
   b[start + 2] = true;
   return b;
 }
-
 function sideSqueezePattern() {
   const b = Array(LANE_COUNT).fill(false);
   const leftSide = Math.random() > 0.5;
@@ -1474,7 +1627,6 @@ function sideSqueezePattern() {
   }
   return b;
 }
-
 function bookendsPattern() {
   const b = Array(LANE_COUNT).fill(false);
   b[0] = true;
@@ -1483,23 +1635,19 @@ function bookendsPattern() {
   b[LANE_COUNT - 2] = true;
   return b;
 }
-
 function randomTriplePattern() {
   const b = Array(LANE_COUNT).fill(false);
   const indices = [];
   for (let i = 0; i < LANE_COUNT; i++) indices.push(i);
-  
   for (let i = indices.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [indices[i], indices[j]] = [indices[j], indices[i]];
   }
-  
   b[indices[0]] = true;
   b[indices[1]] = true;
   b[indices[2]] = true;
   return b;
 }
-
 function checkerPattern() {
   const b = Array(LANE_COUNT).fill(false);
   const first = Math.floor(Math.random() * (LANE_COUNT - 2));
@@ -1507,14 +1655,12 @@ function checkerPattern() {
   b[first + 2] = true;
   return b;
 }
-
 function fullWallPattern() {
   const b = Array(LANE_COUNT).fill(true);
   const safe = Math.floor(Math.random() * LANE_COUNT);
   b[safe] = false;
   return b;
 }
-
 function movingWallPattern() {
   const b = Array(LANE_COUNT).fill(false);
   const safe = Math.floor(Math.random() * LANE_COUNT);
@@ -1523,35 +1669,26 @@ function movingWallPattern() {
   }
   return b;
 }
-
-/* ================= PHASE 2 EXCLUSIVE PATTERNS ================= */
-
 function zigzagPattern() {
   const b = Array(LANE_COUNT).fill(false);
   const direction = Math.random() > 0.5 ? 1 : -1;
   const start = direction > 0 ? 0 : LANE_COUNT - 1;
-  
   for (let i = 0; i < 3 && (start + i * direction >= 0) && (start + i * direction < LANE_COUNT); i++) {
     b[start + i * direction] = true;
   }
   return b;
 }
-
 function snakePattern() {
   const b = Array(LANE_COUNT).fill(false);
   const offset = Math.floor(Math.random() * 2);
-  
   b[offset] = true;
   b[offset + 2] = true;
   if (offset + 4 < LANE_COUNT) b[offset + 4] = true;
-  
   return b;
 }
-
 function spiralPattern() {
   const b = Array(LANE_COUNT).fill(false);
   const type = Math.floor(Math.random() * 2);
-  
   if (type === 0) {
     b[0] = true;
     b[LANE_COUNT - 1] = true;
@@ -1561,41 +1698,32 @@ function spiralPattern() {
     b[mid] = true;
     b[mid + 1] = true;
   }
-  
   return b;
 }
-
 function shiftingWallPattern() {
   const b = Array(LANE_COUNT).fill(true);
   const gapSize = 2;
   const gapStart = Math.floor(Math.random() * (LANE_COUNT - gapSize + 1));
-  
   for (let i = 0; i < gapSize; i++) {
     b[gapStart + i] = false;
   }
-  
   return b;
 }
-
 function wavePattern() {
   const b = Array(LANE_COUNT).fill(false);
   const amplitude = 2;
   const center = Math.floor(LANE_COUNT / 2);
-  
   b[center] = true;
   if (center - amplitude >= 0) b[center - amplitude] = true;
   if (center + amplitude < LANE_COUNT) b[center + amplitude] = true;
-  
   return b;
 }
-
 function doubleWallPattern() {
   const b = Array(LANE_COUNT).fill(true);
   const gapPosition = 1 + Math.floor(Math.random() * (LANE_COUNT - 2));
   b[gapPosition] = false;
   return b;
 }
-
 function crossPattern() {
   const b = Array(LANE_COUNT).fill(false);
   b[0] = true;
@@ -1603,7 +1731,6 @@ function crossPattern() {
   b[LANE_COUNT - 1] = true;
   return b;
 }
-
 function cornerPattern() {
   const b = Array(LANE_COUNT).fill(false);
   b[0] = true;
@@ -1612,7 +1739,6 @@ function cornerPattern() {
   b[LANE_COUNT - 2] = true;
   return b;
 }
-
 function diamondPattern() {
   const b = Array(LANE_COUNT).fill(false);
   const mid = Math.floor(LANE_COUNT / 2);
@@ -1621,7 +1747,6 @@ function diamondPattern() {
   if (mid < LANE_COUNT - 1) b[mid + 1] = true;
   return b;
 }
-
 function splitPattern() {
   const b = Array(LANE_COUNT).fill(false);
   const leftSide = Math.random() > 0.5;
@@ -1634,13 +1759,10 @@ function splitPattern() {
   }
   return b;
 }
-
 /* ================= PATTERN SCHEDULING ================= */
 function schedulePatternForBeat(beatIndex) {
   if (beatIndex >= BEAT_TIMES.length || scheduledBeats.has(beatIndex)) return;
-  
   scheduledBeats.add(beatIndex);
-  
   const blockWidth = LANE_WIDTH - GAP_SIZE * 2;
   const blockHeight = blockWidth * 0.6;
   const travelDistance = HIT_Y + blockHeight;
@@ -1649,12 +1771,9 @@ function schedulePatternForBeat(beatIndex) {
   const targetHitTime = BEAT_TIMES[beatIndex];
   const currentTime = audio.currentTime * 1000;
   const spawnDelay = targetHitTime - currentTime - travelTimeMs;
-  
   if (spawnDelay < -100) return;
-  
   let pattern = generatePattern();
   let available = pattern.map((b, i) => b && isLaneAvailable(i, targetHitTime));
-
   if (!available.some(v => v)) {
     const candidates = [];
     for (let i = 0; i < LANE_COUNT; i++) {
@@ -1662,70 +1781,54 @@ function schedulePatternForBeat(beatIndex) {
         candidates.push(i);
       }
     }
-
     if (candidates.length > 0) {
       const forcedLane = candidates[Math.floor(Math.random() * candidates.length)];
       available[forcedLane] = true;
     }
   }
-
   if (!hasSafeGap(available)) return;
-
-  // Generate unique pattern ID for this beat
   const patternId = `pattern_${beatIndex}_${Date.now()}`;
-
   available.forEach((spawn, lane) => {
     if (!spawn) return;
     reserveLane(lane, targetHitTime);
     setTimeout(() => {
       spawnLaser(lane);
-      spawnBlock(lane, patternId); // Pass pattern ID to block
+      spawnBlock(lane, patternId);
     }, Math.max(0, spawnDelay));
   });
 }
-
 function generatePattern() {
   const intensity = Math.min(1, beatPulse + Math.random() * 0.3);
-  
   if (currentPhase === 2) {
     if (intensity > 0.85) {
       const phase2HardPatterns = [shiftingWallPattern, doubleWallPattern, fullWallPattern, movingWallPattern];
       return phase2HardPatterns[Math.floor(Math.random() * phase2HardPatterns.length)]();
     }
-    
     if (intensity > 0.7) {
       const phase2MediumPatterns = [zigzagPattern, wavePattern, snakePattern, cornerPattern, cascadePattern];
       return phase2MediumPatterns[Math.floor(Math.random() * phase2MediumPatterns.length)]();
     }
-    
     if (intensity > 0.5) {
       const phase2EasyPatterns = [spiralPattern, crossPattern, diamondPattern, splitPattern, alternatingPattern, checkerPattern];
       return phase2EasyPatterns[Math.floor(Math.random() * phase2EasyPatterns.length)]();
     }
-    
     if (Math.random() < 0.2) return Array(LANE_COUNT).fill(false);
-    
     const defaultPatterns = [spiralPattern, crossPattern, splitPattern];
     return defaultPatterns[Math.floor(Math.random() * defaultPatterns.length)]();
   }
-  
   if (intensity > 0.85) {
     const hardPatterns = [randomWall, fullWallPattern, movingWallPattern];
     return hardPatterns[Math.floor(Math.random() * hardPatterns.length)]();
   }
-  
   if (intensity > 0.7) {
     const mediumHardPatterns = [randomBurst, cascadePattern, bookendsPattern, sideSqueezePattern];
     return mediumHardPatterns[Math.floor(Math.random() * mediumHardPatterns.length)]();
   }
-  
   if (intensity > 0.5) {
     const mediumPatterns = [randomMerged, randomTriplePattern, alternatingPattern, centerPattern];
     return mediumPatterns[Math.floor(Math.random() * mediumPatterns.length)]();
   }
-
   if (Math.random() < 0.3) return Array(LANE_COUNT).fill(false);
-  
   const patterns = [
     { fn: randomSingle, weight: 5 },
     { fn: randomMerged, weight: 3 },
@@ -1736,115 +1839,97 @@ function generatePattern() {
     { fn: cascadePattern, weight: 3 },
     { fn: alternatingPattern, weight: 3 }
   ];
-
   let r = Math.random() * patterns.reduce((s, p) => s + p.weight, 0);
   for (const p of patterns) {
     if ((r -= p.weight) <= 0) return p.fn();
   }
   return Array(LANE_COUNT).fill(false);
 }
-
 /* ================= DRAWING ================= */
 function drawWalls() {
   const wallWidth = PLATFORM_MARGIN;
-  
-  // LEFT WALL - Border style with dark center and lighter edges
   const leftGrad = ctx.createLinearGradient(0, 0, wallWidth, 0);
-  leftGrad.addColorStop(0, "#1a3a3a"); // Lighter teal edge (outer)
-  leftGrad.addColorStop(0.15, "#144040"); // Medium teal
-  leftGrad.addColorStop(0.3, "#0a2525"); // Dark center
-  leftGrad.addColorStop(0.7, "#0a2525"); // Dark center
-  leftGrad.addColorStop(0.85, "#144040"); // Medium teal
-  leftGrad.addColorStop(1, "#1a3a3a"); // Lighter teal edge (inner)
+  leftGrad.addColorStop(0, "#1a3a3a");
+  leftGrad.addColorStop(0.15, "#144040");
+  leftGrad.addColorStop(0.3, "#0a2525");
+  leftGrad.addColorStop(0.7, "#0a2525");
+  leftGrad.addColorStop(0.85, "#144040");
+  leftGrad.addColorStop(1, "#1a3a3a");
   ctx.fillStyle = leftGrad;
   ctx.fillRect(0, 0, wallWidth, canvas.height);
-  
-  // Outer edge highlight (left side of left wall)
-  ctx.strokeStyle = "rgba(0, 255, 180, 0.3)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(1, 0);
-  ctx.lineTo(1, canvas.height);
-  ctx.stroke();
-  
-  // Inner edge highlight (right side of left wall)
-  ctx.strokeStyle = "rgba(0, 255, 180, 0.2)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(wallWidth - 1, 0);
-  ctx.lineTo(wallWidth - 1, canvas.height);
-  ctx.stroke();
-  
-  // RIGHT WALL - Border style with dark center and lighter edges (mirrored)
+  if (isHighQuality) {
+    ctx.strokeStyle = "rgba(0, 255, 180, 0.3)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(1, 0);
+    ctx.lineTo(1, canvas.height);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(0, 255, 180, 0.2)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(wallWidth - 1, 0);
+    ctx.lineTo(wallWidth - 1, canvas.height);
+    ctx.stroke();
+  }
   const rightGrad = ctx.createLinearGradient(canvas.width - wallWidth, 0, canvas.width, 0);
-  rightGrad.addColorStop(0, "#1a3a3a"); // Lighter teal edge (inner)
-  rightGrad.addColorStop(0.15, "#144040"); // Medium teal
-  rightGrad.addColorStop(0.3, "#0a2525"); // Dark center
-  rightGrad.addColorStop(0.7, "#0a2525"); // Dark center
-  rightGrad.addColorStop(0.85, "#144040"); // Medium teal
-  rightGrad.addColorStop(1, "#1a3a3a"); // Lighter teal edge (outer)
+  rightGrad.addColorStop(0, "#1a3a3a");
+  rightGrad.addColorStop(0.15, "#144040");
+  rightGrad.addColorStop(0.3, "#0a2525");
+  rightGrad.addColorStop(0.7, "#0a2525");
+  rightGrad.addColorStop(0.85, "#144040");
+  rightGrad.addColorStop(1, "#1a3a3a");
   ctx.fillStyle = rightGrad;
   ctx.fillRect(canvas.width - wallWidth, 0, wallWidth, canvas.height);
-  
-  // Inner edge highlight (left side of right wall)
-  ctx.strokeStyle = "rgba(0, 255, 180, 0.2)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(canvas.width - wallWidth + 1, 0);
-  ctx.lineTo(canvas.width - wallWidth + 1, canvas.height);
-  ctx.stroke();
-  
-  // Outer edge highlight (right side of right wall)
-  ctx.strokeStyle = "rgba(0, 255, 180, 0.3)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(canvas.width - 1, 0);
-  ctx.lineTo(canvas.width - 1, canvas.height);
-  ctx.stroke();
-  
-  // CEILING - Border style gradient
+  if (isHighQuality) {
+    ctx.strokeStyle = "rgba(0, 255, 180, 0.2)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(canvas.width - wallWidth + 1, 0);
+    ctx.lineTo(canvas.width - wallWidth + 1, canvas.height);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(0, 255, 180, 0.3)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(canvas.width - 1, 0);
+    ctx.lineTo(canvas.width - 1, canvas.height);
+    ctx.stroke();
+  }
   const ceilingHeight = 40;
   const ceilingGrad = ctx.createLinearGradient(0, 0, 0, ceilingHeight);
-  ceilingGrad.addColorStop(0, "#1a3a3a"); // Lighter teal top
-  ceilingGrad.addColorStop(0.3, "#0a2525"); // Dark center
-  ceilingGrad.addColorStop(1, "#0a0a0a"); // Black bottom
+  ceilingGrad.addColorStop(0, "#1a3a3a");
+  ceilingGrad.addColorStop(0.3, "#0a2525");
+  ceilingGrad.addColorStop(1, "#0a0a0a");
   ctx.fillStyle = ceilingGrad;
   ctx.fillRect(0, 0, canvas.width, ceilingHeight);
-  
-  // Top edge highlight
-  ctx.strokeStyle = "rgba(0, 255, 180, 0.3)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, 1);
-  ctx.lineTo(canvas.width, 1);
-  ctx.stroke();
-  
-  // Bottom edge highlight
-  ctx.strokeStyle = "rgba(0, 255, 180, 0.2)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, ceilingHeight - 1);
-  ctx.lineTo(canvas.width, ceilingHeight - 1);
-  ctx.stroke();
+  if (isHighQuality) {
+    ctx.strokeStyle = "rgba(0, 255, 180, 0.3)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 1);
+    ctx.lineTo(canvas.width, 1);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(0, 255, 180, 0.2)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, ceilingHeight - 1);
+    ctx.lineTo(canvas.width, ceilingHeight - 1);
+    ctx.stroke();
+  }
 }
-
 function draw3DPlatform() {
-  const depth = 50;
-  const topY = PLATFORM_Y;
-  const bottomY = PLATFORM_Y + PLATFORM_HEIGHT;
-  
-  // NO PLATFORM BACKGROUND - removed all platform drawing
-  // Only draw lane divider lines with Miku theme
-  
   const glowHue = currentPhase === 2 ? 180 : 50;
   
-  // Draw vertical lane dividers with glow
-  ctx.save();
-  ctx.strokeStyle = `hsla(${glowHue}, 100%, 60%, 0.6)`;
-  ctx.lineWidth = 2;
-  ctx.shadowBlur = 8 + beatPulse * 12;
-  ctx.shadowColor = `hsla(${glowHue}, 100%, 60%, 0.5)`;
+  // Pulsing glow intensity based on beat
+  const pulseIntensity = 0.6 + beatPulse * 0.4;
+  const pulseSize = 2 + beatPulse * 3;
   
+  ctx.save();
+  ctx.strokeStyle = `hsla(${glowHue}, 100%, 60%, ${pulseIntensity})`;
+  ctx.lineWidth = pulseSize;
+  if (currentQuality.enableShadows) {
+    ctx.shadowBlur = 8 + beatPulse * 20;
+    ctx.shadowColor = `hsla(${glowHue}, 100%, 60%, ${pulseIntensity})`;
+  }
   for (let i = 1; i < LANE_COUNT; i++) {
     const x = PLATFORM_X + i * LANE_WIDTH;
     ctx.beginPath();
@@ -1852,70 +1937,54 @@ function draw3DPlatform() {
     ctx.lineTo(x, PLATFORM_Y);
     ctx.stroke();
   }
-  
   ctx.restore();
-  
-  // Draw platform edge line (where blocks hit)
   ctx.save();
   ctx.strokeStyle = `hsla(${glowHue}, 100%, 60%, 0.8)`;
   ctx.lineWidth = 3 + beatPulse * 2;
-  ctx.shadowBlur = 15 + beatPulse * 15;
-  ctx.shadowColor = `hsla(${glowHue}, 100%, 60%, 0.8)`;
+  if (currentQuality.enableShadows) {
+    ctx.shadowBlur = 15 + beatPulse * 15;
+    ctx.shadowColor = `hsla(${glowHue}, 100%, 60%, 0.8)`;
+  }
   ctx.beginPath();
-  ctx.moveTo(PLATFORM_X, topY);
-  ctx.lineTo(PLATFORM_X + PLATFORM_WIDTH, topY);
+  ctx.moveTo(PLATFORM_X, PLATFORM_Y);
+  ctx.lineTo(PLATFORM_X + PLATFORM_WIDTH, PLATFORM_Y);
   ctx.stroke();
   ctx.restore();
-  
-  // INWARD GLOW - Light spilling into the lanes (same as wall theme)
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
-  
   const inwardGlowIntensity = 0.15 + beatPulse * 0.25;
-  
-  // Left edge inward glow
   const leftInwardGlow = ctx.createLinearGradient(PLATFORM_X, 0, PLATFORM_X + 100, 0);
   leftInwardGlow.addColorStop(0, `hsla(${glowHue}, 100%, 60%, ${inwardGlowIntensity})`);
   leftInwardGlow.addColorStop(0.5, `hsla(${glowHue}, 100%, 55%, ${inwardGlowIntensity * 0.5})`);
   leftInwardGlow.addColorStop(1, `hsla(${glowHue}, 100%, 50%, 0)`);
   ctx.fillStyle = leftInwardGlow;
   ctx.fillRect(PLATFORM_X, 40, 100, PLATFORM_Y - 40);
-  
-  // Right edge inward glow
   const rightInwardGlow = ctx.createLinearGradient(PLATFORM_X + PLATFORM_WIDTH - 100, 0, PLATFORM_X + PLATFORM_WIDTH, 0);
   rightInwardGlow.addColorStop(0, `hsla(${glowHue}, 100%, 50%, 0)`);
   rightInwardGlow.addColorStop(0.5, `hsla(${glowHue}, 100%, 55%, ${inwardGlowIntensity * 0.5})`);
   rightInwardGlow.addColorStop(1, `hsla(${glowHue}, 100%, 60%, ${inwardGlowIntensity})`);
   ctx.fillStyle = rightInwardGlow;
   ctx.fillRect(PLATFORM_X + PLATFORM_WIDTH - 100, 40, 100, PLATFORM_Y - 40);
-  
   ctx.restore();
 }
-
 /* ================= MAIN LOOP ================= */
 function update() {
   if (!analysisComplete) {
     requestAnimationFrame(update);
     return;
   }
-  
+  // Clear canvas with transparency to show video background
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   frameCount++;
   beatPulse *= 0.85;
-
-  // Always update progress bar when audio is playing
   if (gameStarted && audio && audio.duration) {
     updateProgressBar();
   }
-
-  // Continue running game loop during death animation
   if (gameStarted && (!gameOver || isDeathAnimationPlaying)) {
     const currentTime = audio.currentTime * 1000;
-    
-    // Don't update game logic during death animation
     if (!isDeathAnimationPlaying) {
       checkPhase2Trigger();
-      
+      checkVictoryCondition();
       while (CURRENT_BEAT_INDEX < BEAT_TIMES.length && BEAT_TIMES[CURRENT_BEAT_INDEX] < currentTime) {
         CURRENT_BEAT_INDEX++;
         beatPulse = 1;
@@ -1923,13 +1992,11 @@ function update() {
       if (allowSpawning && BEAT_TIMES.length > 0) {
         const lastBeatTime = BEAT_TIMES[CURRENT_BEAT_INDEX - 1] || 0;
         const gap = currentTime - lastBeatTime;
-
         if (gap > 600) {
           BEAT_TIMES.splice(CURRENT_BEAT_INDEX, 0, currentTime);
           beatPulse = 1;
         }
       }
-      
       if (allowSpawning) {
         const lookAheadTime = currentTime + 3000;
         for (let i = CURRENT_BEAT_INDEX; i < BEAT_TIMES.length; i++) {
@@ -1937,16 +2004,13 @@ function update() {
           schedulePatternForBeat(i);
         }
       }
-      
       if (keys["ArrowLeft"] || mobileLeftPressed) player.vx -= player.accel;
       if (keys["ArrowRight"] || mobileRightPressed) player.vx += player.accel;
       player.vx *= player.friction;
       player.vx = Math.max(-player.maxSpeed, Math.min(player.maxSpeed, player.vx));
       player.x += player.vx;
-      
       player.vy += player.gravity;
       player.y += player.vy;
-      
       if (player.y + player.height >= PLATFORM_Y && player.vy >= 0) {
         if (isOnPlatform(player.x, player.y)) {
           player.y = PLATFORM_Y - player.height;
@@ -1958,62 +2022,42 @@ function update() {
       } else {
         player.isGrounded = false;
       }
-      
-      // Check if player fell off (no animation, instant game over)
       if (player.y > canvas.height) {
         gameOver = true;
         audio.pause();
         bullets = [];
         lasers = [];
-        
-        // Show game over screen immediately
         phaseText.textContent = currentPhase === 2 ? "Phase 2" : "Phase 1";
         gameOverScreen.classList.add('show');
       }
     }
   }
-
-  // Draw thrown items FIRST (behind everything)
-  updateAndDrawItems();
-  
   drawWalls();
   draw3DPlatform();
-  
-  // Lane dividers now drawn inside draw3DPlatform()
-  
   for (let i = lasers.length - 1; i >= 0; i--) {
     const l = lasers[i];
-    
-    // Don't update or draw lasers during death animation
     if (isDeathAnimationPlaying) {
       lasers.splice(i, 1);
       continue;
     }
-    
     l.time -= FRAME_TIME;
     const progress = 1 - l.time / l.maxTime;
-    
     let intensity = progress < 0.15 ? progress / 0.15 : progress < 0.8 ? 1 : (1 - progress) / 0.2;
-    
     const beatPulseEffect = Math.sin(frameCount * (0.15 + progress * 0.25) + l.phase) * 0.5 + 0.5;
     const breathingPulse = Math.sin(frameCount * 0.08 + l.phase) * 0.3 + 0.7;
     const combinedPulse = beatPulseEffect * breathingPulse;
-
     const x = PLATFORM_X + l.lane * LANE_WIDTH + LANE_WIDTH / 2;
     const blockWidth = LANE_WIDTH - GAP_SIZE * 2;
     const widthMultiplier = progress < 0.15 ? 0.2 : progress < 0.5 ? 0.2 + ((progress - 0.15) / 0.35) * 0.8 : progress < 0.8 ? 1 : 1 - ((progress - 0.8) / 0.2) * 0.5;
     const pulsedBrightness = intensity * (0.2 + progress * 0.2) * (0.5 + combinedPulse * 0.3);
-
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    
-    if (intensity > 0.3) {
+    if (isHighQuality && intensity > 0.3) {
       for (let p = 0; p < 8; p++) {
         const angle = (p / 8) * Math.PI * 2 + frameCount * 0.02;
         const distance = (blockWidth * 0.4 + combinedPulse * 10) * widthMultiplier * (0.7 + Math.sin(frameCount * 0.05 + p) * 0.3);
         const px = x + Math.cos(angle) * distance;
         const particleSize = (15 + combinedPulse * 10) * widthMultiplier;
-        
         const particleGrad = ctx.createRadialGradient(px, PLATFORM_Y / 2, 0, px, PLATFORM_Y / 2, particleSize);
         particleGrad.addColorStop(0, `hsla(${l.hue},100%,70%,${pulsedBrightness * 0.5})`);
         particleGrad.addColorStop(0.5, `hsla(${l.hue},100%,60%,${pulsedBrightness * 0.25})`);
@@ -2022,52 +2066,45 @@ function update() {
         ctx.fillRect(px - particleSize, 40, particleSize * 2, PLATFORM_Y - 40);
       }
     }
-    
-    const layers = [
+    const layerCount = currentQuality.laserLayers;
+    const layers = isHighQuality ? [
       { width: blockWidth * 1.3, blur: 35, opacity: 0.3 },
       { width: blockWidth * 0.9 + combinedPulse * blockWidth * 0.1, blur: 28, opacity: 0.5 },
       { width: blockWidth + combinedPulse * blockWidth * 0.05, blur: 20, opacity: 0.7 },
       { width: blockWidth * 0.7 + combinedPulse * blockWidth * 0.05, blur: 15, opacity: 0.8 },
       { width: blockWidth * 0.4 + combinedPulse * blockWidth * 0.05, blur: 12, opacity: 0.9 }
+    ] : [
+      { width: blockWidth * 1.1, blur: 15, opacity: 0.4 },
+      { width: blockWidth * 0.7, blur: 10, opacity: 0.7 }
     ];
-    
     layers.forEach((layer, idx) => {
       const w = layer.width * widthMultiplier;
-      ctx.shadowBlur = layer.blur * intensity;
-      ctx.shadowColor = `hsla(${l.hue},100%,${60 + idx * 5}%,${pulsedBrightness})`;
+      if (currentQuality.enableShadows) {
+        ctx.shadowBlur = layer.blur * intensity;
+        ctx.shadowColor = `hsla(${l.hue},100%,${60 + idx * 5}%,${pulsedBrightness})`;
+      }
       ctx.fillStyle = `hsla(${l.hue},100%,${60 + idx * 5}%,${pulsedBrightness * layer.opacity})`;
       ctx.fillRect(x - w / 2, 40, w, PLATFORM_Y - 40);
     });
-    
     ctx.shadowBlur = 0;
     ctx.restore();
     if (l.time <= 0) lasers.splice(i, 1);
   }
-
   if (gameStarted) {
     drawHeartPlayer(player.x, player.y, player.width);
   }
-
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i];
-    
-    // Don't update bullets during death animation
     if (!isDeathAnimationPlaying) {
       b.y += b.speed;
-
-      // Check if block hit the platform and play sound once per pattern
       if (b.y >= PLATFORM_Y && b.y < PLATFORM_Y + b.speed * 2) {
         if (!b.glowTriggered) {
           triggerScreenGlow(b.hue);
           createCollisionParticles(b.x, PLATFORM_Y, b.w, b.hue);
           b.glowTriggered = true;
-          
-          // Play impact sound only once per pattern
           if (!impactSoundsPlaying.has(b.patternId)) {
             impactSoundsPlaying.add(b.patternId);
             playImpactSound();
-            
-            // Clean up old pattern IDs after a delay
             setTimeout(() => {
               impactSoundsPlaying.delete(b.patternId);
             }, 500);
@@ -2075,153 +2112,66 @@ function update() {
         }
       }
     }
-
-    // Draw bullets only if not during death animation
     if (b.y < PLATFORM_Y + PLATFORM_HEIGHT && !isDeathAnimationPlaying) {
-      const blurLength = 50;
+      const blurLength = isHighQuality ? 50 : 35;
       const blurStartY = Math.max(40, b.y - blurLength);
-      
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       const blurGrad = ctx.createLinearGradient(b.x + b.w / 2, blurStartY, b.x + b.w / 2, b.y);
-      blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
-      blurGrad.addColorStop(0.3, `hsla(${b.hue},100%,60%,0.15)`);
-      blurGrad.addColorStop(0.6, `hsla(${b.hue},100%,60%,0.4)`);
-      blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.7)`);
+      if (isHighQuality) {
+        blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
+        blurGrad.addColorStop(0.3, `hsla(${b.hue},100%,60%,0.15)`);
+        blurGrad.addColorStop(0.6, `hsla(${b.hue},100%,60%,0.4)`);
+        blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.7)`);
+      } else {
+        blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
+        blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.5)`);
+      }
       ctx.fillStyle = blurGrad;
       ctx.fillRect(b.x, blurStartY, b.w, b.y - blurStartY);
       ctx.restore();
-
-      const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
-      const r = Math.max(b.w, b.h) * 1.4;
-      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-      g.addColorStop(0, `hsla(${b.hue},100%,55%,0.4)`);
-      g.addColorStop(0.5, `hsla(${b.hue},100%,50%,0.2)`);
-      g.addColorStop(1, `hsla(${b.hue},100%,50%,0)`);
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      ctx.fillStyle = g;
-      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-      ctx.restore();
-
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = `hsl(${b.hue},100%,60%)`;
+      if (isHighQuality) {
+        const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+        const r = Math.max(b.w, b.h) * 1.4;
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        g.addColorStop(0, `hsla(${b.hue},100%,55%,0.4)`);
+        g.addColorStop(0.5, `hsla(${b.hue},100%,50%,0.2)`);
+        g.addColorStop(1, `hsla(${b.hue},100%,50%,0)`);
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.fillStyle = g;
+        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+        ctx.restore();
+      }
+      if (currentQuality.enableShadows) {
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = `hsl(${b.hue},100%,60%)`;
+      }
       ctx.fillStyle = `hsl(${b.hue},100%,60%)`;
       ctx.fillRect(b.x, b.y, b.w, b.h);
       ctx.fillStyle = `hsl(${b.hue},100%,80%)`;
       ctx.fillRect(b.x + b.w * 0.3, b.y + b.h * 0.3, b.w * 0.4, b.h * 0.4);
       ctx.shadowBlur = 0;
     }
-
-    // Collision detection with player - disabled during death animation
     if (gameStarted && !isDeathAnimationPlaying && player.x < b.x + b.w && player.x + player.width > b.x && player.y < b.y + b.h && player.y + player.height > b.y) {
       loseLife();
       bullets.splice(i, 1);
       continue;
     }
-    
     if (b.y > canvas.height) bullets.splice(i, 1);
   }
-  
   updateAndDrawParticles();
   updateAndDrawDissolveParticles();
   updateScreenGlow();
-  
-  // Check for automatic item throws every frame
-  if (gameStarted && !gameOver) {
+  updateAndDrawItems(); // Draw items on top of everything
+  if (gameStarted && !gameOver && !isDeathAnimationPlaying) {
     checkItemThrow();
   }
-
-  if (!gameStarted) {
-    ctx.fillStyle = "rgba(0,0,0,0.7)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#00ddff";
-    ctx.font = "40px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("READY!", canvas.width / 2, canvas.height / 2 - 20);
-    ctx.fillStyle = "white";
-    ctx.font = "20px sans-serif";
-    const startText = isMobile ? "Tap to start" : "Press any key to start";
-    ctx.fillText(startText, canvas.width / 2, canvas.height / 2 + 20);
-    ctx.textAlign = "left";
-  }
-
   requestAnimationFrame(update);
 }
-
 function restart() {
-  if (startDelayTimer) {
-    clearTimeout(startDelayTimer);
-    startDelayTimer = null;
-  }
-  
-  // Clear any pending death animation timeouts
-  deathAnimationTimeouts.forEach(timeout => clearTimeout(timeout));
-  deathAnimationTimeouts = [];
-  
-  // Hide game over screen
-  gameOverScreen.classList.remove('show');
-  
-  bullets = [];
-  lasers = [];
-  particles = [];
-  dissolveParticles = [];
-  thrownItems = []; // Clear thrown items
-  lastItemThrowTime = 0; // Reset item timer
-  laneReservations.fill(0);
-  gameOver = false;
-  gameStarted = false;
-  audioStarted = false;
-  allowSpawning = false;
-  frameCount = 0;
-  CURRENT_BEAT_INDEX = 0;
-  scheduledBeats.clear();
-  isDeathAnimationPlaying = false;
-  deathAnimationStartTime = 0;
-  isFreezing = false;
-  freezeStartTime = 0;
-  impactSoundsPlaying.clear(); // Clear SFX tracking
-  player.x = PLATFORM_X + PLATFORM_WIDTH / 2;
-  player.y = PLATFORM_Y - player.height;
-  player.vx = 0;
-  player.vy = 0;
-  player.isGrounded = true;
-  audio.currentTime = 0;
-  audio.pause();
-  
-  // Reset Phase 2 variables
-  currentPhase = 1;
-  phase2Activated = false;
-  phase2Warning = false;
-  currentBlockSpeed = BLOCK_SPEED;
-  
-  // Reset screen glow
-  activeGlows = [];
-  screenGlow.classList.remove('active');
-  
-  // Reset lives
-  playerLives = 3;
-  isInvulnerable = false;
-  invulnerabilityTimer = 0;
-  hearts.forEach(heart => {
-    heart.classList.remove('lost', 'damage');
-  });
-  
-  // Reset mobile controls
-  mobileLeftPressed = false;
-  mobileRightPressed = false;
-  btnLeft.classList.remove('pressed');
-  btnRight.classList.remove('pressed');
-  
-  // Reset progress bar
-  progressFill.style.width = '0%';
-  progressTime.textContent = '0:00 / 0:00';
-  
-  analyzeBeat();
-  
-  console.log("Game restarted");
+  window.location.reload();
 }
-
 analyzeBeat();
 requestAnimationFrame(update);
 </script>
