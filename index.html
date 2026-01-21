@@ -715,8 +715,15 @@ window.addEventListener('DOMContentLoaded', () => {
 });function toggleQuality() {
   // Mobile users can't toggle - always use mobile settings
   if (isMobile) {
-    console.log('Quality toggle disabled on mobile devices');
-    return;
+    mobileControls.classList.add('active');
+    // Force mobile-specific quality settings
+    isHighQuality = false;
+    currentQuality = QUALITY_SETTINGS.mobile;
+    console.log('Mobile detected - using optimized mobile settings');
+    
+    // ADD THESE 3 LINES:
+    canvas.width = 450;  // Reduce canvas resolution
+    canvas.height = 600;
   }
   
   isHighQuality = !isHighQuality;
@@ -2177,30 +2184,25 @@ function update() {
         }
       }
     }
-if (b.y < PLATFORM_Y + PLATFORM_HEIGHT && !isDeathAnimationPlaying) {
-      // Motion blur (only if enabled in quality settings)
-      if (currentQuality.enableMotionBlur) {
-        const blurLength = isHighQuality ? 50 : 35;
-        const blurStartY = Math.max(40, b.y - blurLength);
-        ctx.save();
-        ctx.globalCompositeOperation = "lighter";
-        const blurGrad = ctx.createLinearGradient(b.x + b.w / 2, blurStartY, b.x + b.w / 2, b.y);
-        if (isHighQuality) {
-          blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
-          blurGrad.addColorStop(0.3, `hsla(${b.hue},100%,60%,0.15)`);
-          blurGrad.addColorStop(0.6, `hsla(${b.hue},100%,60%,0.4)`);
-          blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.7)`);
-        } else {
-          blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
-          blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.5)`);
-        }
-        ctx.fillStyle = blurGrad;
-        ctx.fillRect(b.x, blurStartY, b.w, b.y - blurStartY);
-        ctx.restore();
+    if (b.y < PLATFORM_Y + PLATFORM_HEIGHT && !isDeathAnimationPlaying) {
+      const blurLength = isHighQuality ? 50 : 35;
+      const blurStartY = Math.max(40, b.y - blurLength);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      const blurGrad = ctx.createLinearGradient(b.x + b.w / 2, blurStartY, b.x + b.w / 2, b.y);
+      if (isHighQuality) {
+        blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
+        blurGrad.addColorStop(0.3, `hsla(${b.hue},100%,60%,0.15)`);
+        blurGrad.addColorStop(0.6, `hsla(${b.hue},100%,60%,0.4)`);
+        blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.7)`);
+      } else {
+        blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
+        blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.5)`);
       }
-      
-      // Glow effect (only if enabled in quality settings)
-      if (currentQuality.enableGlow) {
+      ctx.fillStyle = blurGrad;
+      ctx.fillRect(b.x, blurStartY, b.w, b.y - blurStartY);
+      ctx.restore();
+      if (isHighQuality) {
         const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
         const r = Math.max(b.w, b.h) * 1.4;
         const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
@@ -2213,21 +2215,14 @@ if (b.y < PLATFORM_Y + PLATFORM_HEIGHT && !isDeathAnimationPlaying) {
         ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
         ctx.restore();
       }
-      
-      // Shadow (only if enabled in quality settings)
       if (currentQuality.enableShadows) {
         ctx.shadowBlur = 20;
         ctx.shadowColor = `hsl(${b.hue},100%,60%)`;
       }
-      
-      // Main block
       ctx.fillStyle = `hsl(${b.hue},100%,60%)`;
       ctx.fillRect(b.x, b.y, b.w, b.h);
-      
-      // Highlight
       ctx.fillStyle = `hsl(${b.hue},100%,80%)`;
       ctx.fillRect(b.x + b.w * 0.3, b.y + b.h * 0.3, b.w * 0.4, b.h * 0.4);
-      
       ctx.shadowBlur = 0;
     }
     if (gameStarted && !isDeathAnimationPlaying && player.x < b.x + b.w && player.x + player.width > b.x && player.y < b.y + b.h && player.y + player.height > b.y) {
