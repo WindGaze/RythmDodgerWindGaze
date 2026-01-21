@@ -1468,9 +1468,9 @@ async function analyzeBeat() {
 }
 function detectBeats(channelData, sampleRate) {
   const beats = [];
-  const windowSize = isMobile ? Math.floor(sampleRate * 0.1) : Math.floor(sampleRate * 0.05);
-  const hopSize = isMobile ? windowSize : Math.floor(windowSize / 2);
-  const energyThreshold = isMobile ? 1.5 : 1.3;
+  const windowSize = Math.floor(sampleRate * 0.05);
+  const hopSize = Math.floor(windowSize / 2);
+  const energyThreshold = 1.3;
   const sampleStep = isMobile ? 4 : 1; // Sample every 4th point on mobile
   
   const energies = [];
@@ -1493,7 +1493,7 @@ function detectBeats(channelData, sampleRate) {
     avgEnergy /= historySize;
     if (currentEnergy > avgEnergy * energyThreshold) {
       const timeMs = (i * hopSize / sampleRate) * 1000;
-      const minInterval = isMobile ? 250 : 200;
+      const minInterval = 200;
       if (beats.length === 0 || timeMs - beats[beats.length - 1] > minInterval) {
         beats.push(timeMs);
       }
@@ -1889,21 +1889,36 @@ function schedulePatternForBeat(beatIndex) {
 function generatePattern() {
   const intensity = Math.min(1, beatPulse + Math.random() * 0.3);
   
-  // MOBILE: Use only simple patterns to avoid overwhelming small screen
+  // MOBILE: Ensure patterns always have safe gaps
   if (isMobile) {
-    if (intensity > 0.7) {
-      const mobileHardPatterns = [randomBurst, cascadePattern, alternatingPattern];
-      return mobileHardPatterns[Math.floor(Math.random() * mobileHardPatterns.length)]();
+    let pattern;
+    let attempts = 0;
+    
+    do {
+      if (intensity > 0.7) {
+        const mobileHardPatterns = [randomMerged, randomTriplePattern, cascadePattern];
+        pattern = mobileHardPatterns[Math.floor(Math.random() * mobileHardPatterns.length)]();
+      } else if (intensity > 0.5) {
+        const mobileMediumPatterns = [randomSingle, randomMerged, edgePattern, centerPattern];
+        pattern = mobileMediumPatterns[Math.floor(Math.random() * mobileMediumPatterns.length)]();
+      } else {
+        if (Math.random() < 0.3) return Array(LANE_COUNT).fill(false);
+        const mobileEasyPatterns = [randomSingle, edgePattern, checkerPattern];
+        pattern = mobileEasyPatterns[Math.floor(Math.random() * mobileEasyPatterns.length)]();
+      }
+      attempts++;
+    } while (!hasSafeGap(pattern) && attempts < 10);
+    
+    // If still no safe gap after 10 attempts, force create one
+    if (!hasSafeGap(pattern)) {
+      const safeLane = Math.floor(Math.random() * LANE_COUNT);
+      pattern[safeLane] = false;
+      if (safeLane > 0) pattern[safeLane - 1] = false;
+      else pattern[safeLane + 1] = false;
     }
-    if (intensity > 0.5) {
-      const mobileMediumPatterns = [randomMerged, randomTriplePattern, edgePattern, centerPattern];
-      return mobileMediumPatterns[Math.floor(Math.random() * mobileMediumPatterns.length)]();
-    }
-    if (Math.random() < 0.3) return Array(LANE_COUNT).fill(false);
-    const mobileEasyPatterns = [randomSingle, randomMerged, edgePattern, checkerPattern];
-    return mobileEasyPatterns[Math.floor(Math.random() * mobileEasyPatterns.length)]();
+    
+    return pattern;
   }
-  
   // DESKTOP: Original patterns
   if (currentPhase === 2) {
     if (intensity > 0.85) {
