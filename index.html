@@ -1259,7 +1259,6 @@ function checkItemThrow() {
     lastItemThrowTime = currentTime;
   }
 }
- 
 const player = {
   x: PLATFORM_X + PLATFORM_WIDTH / 2,
   y: PLATFORM_Y - 20,
@@ -1267,9 +1266,9 @@ const player = {
   height: isMobile ? 20 : 24,
   vx: 0,
   vy: 0,
-  accel: isMobile ? 1.5 : 1.3,
+  accel: isMobile ? 1.8 : 1.3,        // Faster acceleration
   friction: 0.88,
-  maxSpeed: isMobile ? 10 : 12,
+  maxSpeed: isMobile ? 14 : 12,       // Higher max speed
   gravity: 0.6,
   jumpPower: isMobile ? -10 : -12,
   isGrounded: false
@@ -1562,7 +1561,7 @@ function startGame() {
   gameStarted = true;
   audioStarted = true;
   lastItemThrowTime = Date.now();
-  currentBlockSpeed = isMobile ? BLOCK_SPEED - 1 : BLOCK_SPEED + currentQuality.speedBonus;
+  currentBlockSpeed = BLOCK_SPEED + currentQuality.speedBonus; // Same speed for mobile
   if (startDelayTimer) {
     clearTimeout(startDelayTimer);
     startDelayTimer = null;
@@ -1889,6 +1888,23 @@ function schedulePatternForBeat(beatIndex) {
 }
 function generatePattern() {
   const intensity = Math.min(1, beatPulse + Math.random() * 0.3);
+  
+  // MOBILE: Use only simple patterns to avoid overwhelming small screen
+  if (isMobile) {
+    if (intensity > 0.7) {
+      const mobileHardPatterns = [randomBurst, cascadePattern, alternatingPattern];
+      return mobileHardPatterns[Math.floor(Math.random() * mobileHardPatterns.length)]();
+    }
+    if (intensity > 0.5) {
+      const mobileMediumPatterns = [randomMerged, randomTriplePattern, edgePattern, centerPattern];
+      return mobileMediumPatterns[Math.floor(Math.random() * mobileMediumPatterns.length)]();
+    }
+    if (Math.random() < 0.3) return Array(LANE_COUNT).fill(false);
+    const mobileEasyPatterns = [randomSingle, randomMerged, edgePattern, checkerPattern];
+    return mobileEasyPatterns[Math.floor(Math.random() * mobileEasyPatterns.length)]();
+  }
+  
+  // DESKTOP: Original patterns
   if (currentPhase === 2) {
     if (intensity > 0.85) {
       const phase2HardPatterns = [shiftingWallPattern, doubleWallPattern, fullWallPattern, movingWallPattern];
@@ -1906,6 +1922,7 @@ function generatePattern() {
     const defaultPatterns = [spiralPattern, crossPattern, splitPattern];
     return defaultPatterns[Math.floor(Math.random() * defaultPatterns.length)]();
   }
+  
   if (intensity > 0.85) {
     const hardPatterns = [randomWall, fullWallPattern, movingWallPattern];
     return hardPatterns[Math.floor(Math.random() * hardPatterns.length)]();
