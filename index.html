@@ -712,20 +712,13 @@ window.addEventListener('DOMContentLoaded', () => {
       qualityButton.style.display = 'none';
     }
   }
-});function toggleQuality() {
+});
+
+function toggleQuality() {
   // Mobile users can't toggle - always use mobile settings
   if (isMobile) {
-    mobileControls.classList.add('active');
-    // Force mobile-specific quality settings
-    isHighQuality = false;
-    currentQuality = QUALITY_SETTINGS.mobile;
-    console.log('Mobile detected - using optimized mobile settings');
-    
-    // ADD THESE 3 LINES:
-    canvas.width = 450;  // Reduce canvas resolution
-    canvas.height = 600;
+    return; // Don't allow quality toggle on mobile
   }
-  
   isHighQuality = !isHighQuality;
   currentQuality = isHighQuality ? QUALITY_SETTINGS.high : QUALITY_SETTINGS.low;
   const qualityText = document.getElementById('quality-text');
@@ -827,10 +820,8 @@ if (isMobile) {
   isHighQuality = false;
   currentQuality = QUALITY_SETTINGS.mobile;
   console.log('Mobile detected - using optimized mobile settings');
-  
-  // Reduce canvas resolution for mobile
-  canvas.width = 400;
-  canvas.height = 650;
+   
+  bgVideo.pause();
 }
 /* ================= PROGRESS BAR ================= */
 function updateProgressBar() {
@@ -879,15 +870,24 @@ btnRight.addEventListener('touchcancel', (e) => {
   btnRight.classList.remove('pressed');
 });
 /* ================= SETTINGS ================= */
+/* ================= SETTINGS ================= */
 const BLOCK_SPEED = 8;
 let BEAT_TIMES = [];
 let CURRENT_BEAT_INDEX = 0;
 const LANE_COUNT = 5;
 const GAP_SIZE = 2.5;
 const MIN_SAFE_LANES = 1;
-const PLATFORM_Y = 680;
+
+// Mobile-specific canvas resizing
+if (isMobile) {
+  canvas.width = 400;
+  canvas.height = 650;
+}
+
+// Calculate platform constants AFTER canvas size is set
+const PLATFORM_Y = isMobile ? 550 : 680;
 const PLATFORM_HEIGHT = 30;
-const PLATFORM_MARGIN = 80;
+const PLATFORM_MARGIN = isMobile ? 60 : 80;
 const PLATFORM_WIDTH = canvas.width - PLATFORM_MARGIN * 2;
 const PLATFORM_X = PLATFORM_MARGIN;
 const LANE_WIDTH = PLATFORM_WIDTH / LANE_COUNT;
@@ -1259,19 +1259,19 @@ function checkItemThrow() {
     lastItemThrowTime = currentTime;
   }
 }
-/* ================= PLAYER ================= */
+ 
 const player = {
   x: PLATFORM_X + PLATFORM_WIDTH / 2,
   y: PLATFORM_Y - 20,
-  width: 24,
-  height: 24,
+  width: isMobile ? 20 : 24,
+  height: isMobile ? 20 : 24,
   vx: 0,
   vy: 0,
-  accel: 1.3,
+  accel: isMobile ? 1.5 : 1.3,
   friction: 0.88,
-  maxSpeed: 12,
+  maxSpeed: isMobile ? 10 : 12,
   gravity: 0.6,
-  jumpPower: -12,
+  jumpPower: isMobile ? -10 : -12,
   isGrounded: false
 };
 const HIT_Y = PLATFORM_Y;
@@ -1562,7 +1562,7 @@ function startGame() {
   gameStarted = true;
   audioStarted = true;
   lastItemThrowTime = Date.now();
-  currentBlockSpeed = BLOCK_SPEED + currentQuality.speedBonus;
+  currentBlockSpeed = isMobile ? BLOCK_SPEED - 1 : BLOCK_SPEED + currentQuality.speedBonus;
   if (startDelayTimer) {
     clearTimeout(startDelayTimer);
     startDelayTimer = null;
