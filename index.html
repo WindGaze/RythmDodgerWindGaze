@@ -690,16 +690,16 @@ const QUALITY_SETTINGS = {
     speedBonus: 1
   },
   mobile: {
-    maxParticles: 3,        // CHANGE from 15 to 3
-    collisionParticles: 2,  // CHANGE from 5 to 2
-    dissolveParticles: 3,   // CHANGE from 8 to 3
+    maxParticles: 15,
+    collisionParticles: 5,
+    dissolveParticles: 8,
     laserLayers: 1,
-    particleDecay: 0.2,     // CHANGE from 0.05 to 0.2 (particles die 4x faster)
+    particleDecay: 0.05,
     screenGlowLayers: 0,
     enableShadows: false,
     enableMotionBlur: false,
     enableGlow: false,
-    speedBonus: 1           // CHANGE from 1 to 0
+    speedBonus: 1
   }
 };
 let currentQuality = QUALITY_SETTINGS.high;
@@ -823,14 +823,14 @@ const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/
                  (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
 if (isMobile) {
   mobileControls.classList.add('active');
+  // Force mobile-specific quality settings
   isHighQuality = false;
   currentQuality = QUALITY_SETTINGS.mobile;
   console.log('Mobile detected - using optimized mobile settings');
   
-  // ADD THESE LINES:
+  // Reduce canvas resolution for mobile
   canvas.width = 400;
-  canvas.height = 533;
-  bgVideo.style.display = 'none';  // Disable video
+  canvas.height = 650;
 }
 /* ================= PROGRESS BAR ================= */
 function updateProgressBar() {
@@ -979,7 +979,7 @@ let phase2Warning = false;
 /* ================= SCREEN GLOW SYSTEM ================= */
 let activeGlows = [];
 function triggerScreenGlow(hue) {
-  if (isMobile) return;
+  if (isMobile) return; // Skip on mobile
   activeGlows.push({
     hue: hue,
     intensity: 1.0,
@@ -1029,6 +1029,7 @@ function updateScreenGlow() {
 let particles = [];
 let dissolveParticles = [];
 function createDissolveParticles(x, y, size) {
+  if (isMobile) return; // Skip entirely on mobile
   if (isNaN(x) || isNaN(y) || isNaN(size)) return;
   const centerX = x + size / 2;
   const centerY = y + size / 2;
@@ -1123,36 +1124,43 @@ function updateAndDrawParticles() {
     p.y += p.vy;
     p.vy += 0.3;
     p.vx *= 0.98;
-    p.rotation += p.rotationSpeed;
     p.life -= p.decay;
+    
     if (p.life <= 0) {
       particles.splice(i, 1);
       continue;
     }
-ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    ctx.translate(p.x, p.y);
-    ctx.rotate(p.rotation);
     
-    // Only draw glow effects if enabled in quality settings
-    if (currentQuality.enableGlow) {
-      const glowSize = p.size * 3;
-      const glowGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
-      glowGrad.addColorStop(0, `hsla(${p.hue}, 100%, 70%, ${p.life * 0.6})`);
-      glowGrad.addColorStop(0.5, `hsla(${p.hue}, 100%, 60%, ${p.life * 0.3})`);
-      glowGrad.addColorStop(1, `hsla(${p.hue}, 100%, 50%, 0)`);
-      ctx.fillStyle = glowGrad;
-      ctx.fillRect(-glowSize, -glowSize, glowSize * 2, glowSize * 2);
+    if (isMobile) {
+      // Simple rendering for mobile
+      ctx.fillStyle = `hsla(${p.hue}, 100%, 60%, ${p.life * 0.8})`;
+      ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+    } else {
+      // Full effects for desktop
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation);
+      
+      if (currentQuality.enableGlow) {
+        const glowSize = p.size * 3;
+        const glowGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
+        glowGrad.addColorStop(0, `hsla(${p.hue}, 100%, 70%, ${p.life * 0.6})`);
+        glowGrad.addColorStop(0.5, `hsla(${p.hue}, 100%, 60%, ${p.life * 0.3})`);
+        glowGrad.addColorStop(1, `hsla(${p.hue}, 100%, 50%, 0)`);
+        ctx.fillStyle = glowGrad;
+        ctx.fillRect(-glowSize, -glowSize, glowSize * 2, glowSize * 2);
+      }
+      
+      if (currentQuality.enableShadows) {
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = `hsl(${p.hue}, 100%, 60%)`;
+      }
+      
+      ctx.fillStyle = `hsl(${p.hue}, 100%, ${60 + p.life * 20}%)`;
+      ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+      ctx.restore();
     }
-    
-    if (currentQuality.enableShadows) {
-      ctx.shadowBlur = 15;
-      ctx.shadowColor = `hsl(${p.hue}, 100%, 60%)`;
-    }
-    
-    ctx.fillStyle = `hsl(${p.hue}, 100%, ${60 + p.life * 20}%)`;
-    ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
-    ctx.restore();
   }
 }
 /* ================= GAME STATE ================= */
@@ -1461,19 +1469,22 @@ async function analyzeBeat() {
 }
 function detectBeats(channelData, sampleRate) {
   const beats = [];
-  const windowSize = Math.floor(sampleRate * 0.05);
-  const hopSize = Math.floor(windowSize / 2);
-  const energyThreshold = 1.3;
+  const windowSize = isMobile ? Math.floor(sampleRate * 0.1) : Math.floor(sampleRate * 0.05);
+  const hopSize = isMobile ? windowSize : Math.floor(windowSize / 2);
+  const energyThreshold = isMobile ? 1.5 : 1.3;
+  const sampleStep = isMobile ? 4 : 1; // Sample every 4th point on mobile
+  
   const energies = [];
   for (let i = 0; i < channelData.length - windowSize; i += hopSize) {
     let energy = 0;
-    for (let j = 0; j < windowSize; j++) {
+    for (let j = 0; j < windowSize; j += sampleStep) {
       const sample = channelData[i + j];
       energy += sample * sample;
     }
     energies.push(energy / windowSize);
   }
-  const historySize = 43;
+  
+  const historySize = isMobile ? 20 : 43;
   for (let i = historySize; i < energies.length; i++) {
     const currentEnergy = energies[i];
     let avgEnergy = 0;
@@ -1483,12 +1494,14 @@ function detectBeats(channelData, sampleRate) {
     avgEnergy /= historySize;
     if (currentEnergy > avgEnergy * energyThreshold) {
       const timeMs = (i * hopSize / sampleRate) * 1000;
-      if (beats.length === 0 || timeMs - beats[beats.length - 1] > 200) {
+      const minInterval = isMobile ? 250 : 200;
+      if (beats.length === 0 || timeMs - beats[beats.length - 1] > minInterval) {
         beats.push(timeMs);
       }
     }
   }
-  if (beats.length > 4) {
+  
+  if (beats.length > 4 && !isMobile) {
     return refineBeatTiming(beats);
   }
   return beats;
@@ -2143,26 +2156,34 @@ function update() {
         ctx.fillRect(px - particleSize, 40, particleSize * 2, PLATFORM_Y - 40);
       }
     }
-    const layerCount = currentQuality.laserLayers;
-    const layers = isHighQuality ? [
-      { width: blockWidth * 1.3, blur: 35, opacity: 0.3 },
-      { width: blockWidth * 0.9 + combinedPulse * blockWidth * 0.1, blur: 28, opacity: 0.5 },
-      { width: blockWidth + combinedPulse * blockWidth * 0.05, blur: 20, opacity: 0.7 },
-      { width: blockWidth * 0.7 + combinedPulse * blockWidth * 0.05, blur: 15, opacity: 0.8 },
-      { width: blockWidth * 0.4 + combinedPulse * blockWidth * 0.05, blur: 12, opacity: 0.9 }
-    ] : [
-      { width: blockWidth * 1.1, blur: 15, opacity: 0.4 },
-      { width: blockWidth * 0.7, blur: 10, opacity: 0.7 }
-    ];
-    layers.forEach((layer, idx) => {
-      const w = layer.width * widthMultiplier;
-      if (currentQuality.enableShadows) {
-        ctx.shadowBlur = layer.blur * intensity;
-        ctx.shadowColor = `hsla(${l.hue},100%,${60 + idx * 5}%,${pulsedBrightness})`;
-      }
-      ctx.fillStyle = `hsla(${l.hue},100%,${60 + idx * 5}%,${pulsedBrightness * layer.opacity})`;
+  if (isMobile) {
+      // Single simple layer for mobile
+      const w = blockWidth * 0.7 * widthMultiplier;
+      ctx.fillStyle = `hsla(${l.hue},100%,60%,${pulsedBrightness * 0.6})`;
       ctx.fillRect(x - w / 2, 40, w, PLATFORM_Y - 40);
-    });
+    } else {
+      // Multiple layers for desktop
+      const layerCount = currentQuality.laserLayers;
+      const layers = isHighQuality ? [
+        { width: blockWidth * 1.3, blur: 35, opacity: 0.3 },
+        { width: blockWidth * 0.9 + combinedPulse * blockWidth * 0.1, blur: 28, opacity: 0.5 },
+        { width: blockWidth + combinedPulse * blockWidth * 0.05, blur: 20, opacity: 0.7 },
+        { width: blockWidth * 0.7 + combinedPulse * blockWidth * 0.05, blur: 15, opacity: 0.8 },
+        { width: blockWidth * 0.4 + combinedPulse * blockWidth * 0.05, blur: 12, opacity: 0.9 }
+      ] : [
+        { width: blockWidth * 1.1, blur: 15, opacity: 0.4 },
+        { width: blockWidth * 0.7, blur: 10, opacity: 0.7 }
+      ];
+      layers.forEach((layer, idx) => {
+        const w = layer.width * widthMultiplier;
+        if (currentQuality.enableShadows) {
+          ctx.shadowBlur = layer.blur * intensity;
+          ctx.shadowColor = `hsla(${l.hue},100%,${60 + idx * 5}%,${pulsedBrightness})`;
+        }
+        ctx.fillStyle = `hsla(${l.hue},100%,${60 + idx * 5}%,${pulsedBrightness * layer.opacity})`;
+        ctx.fillRect(x - w / 2, 40, w, PLATFORM_Y - 40);
+      });
+    }
     ctx.shadowBlur = 0;
     ctx.restore();
     if (l.time <= 0) lasers.splice(i, 1);
@@ -2189,24 +2210,28 @@ function update() {
         }
       }
     }
-    if (b.y < PLATFORM_Y + PLATFORM_HEIGHT && !isDeathAnimationPlaying) {
-      const blurLength = isMobile ? 10 : (isHighQuality ? 50 : 35);  // CHANGE THIS LINE      const blurStartY = Math.max(40, b.y - blurLength);
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      const blurGrad = ctx.createLinearGradient(b.x + b.w / 2, blurStartY, b.x + b.w / 2, b.y);
-      if (isHighQuality) {
-        blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
-        blurGrad.addColorStop(0.3, `hsla(${b.hue},100%,60%,0.15)`);
-        blurGrad.addColorStop(0.6, `hsla(${b.hue},100%,60%,0.4)`);
-        blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.7)`);
-      } else {
-        blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
-        blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.5)`);
+  if (b.y < PLATFORM_Y + PLATFORM_HEIGHT && !isDeathAnimationPlaying) {
+      if (!isMobile) {
+        // Motion blur only on desktop
+        const blurLength = isHighQuality ? 50 : 35;
+        const blurStartY = Math.max(40, b.y - blurLength);
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        const blurGrad = ctx.createLinearGradient(b.x + b.w / 2, blurStartY, b.x + b.w / 2, b.y);
+        if (isHighQuality) {
+          blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
+          blurGrad.addColorStop(0.3, `hsla(${b.hue},100%,60%,0.15)`);
+          blurGrad.addColorStop(0.6, `hsla(${b.hue},100%,60%,0.4)`);
+          blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.7)`);
+        } else {
+          blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
+          blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.5)`);
+        }
+        ctx.fillStyle = blurGrad;
+        ctx.fillRect(b.x, blurStartY, b.w, b.y - blurStartY);
+        ctx.restore();
       }
-      ctx.fillStyle = blurGrad;
-      ctx.fillRect(b.x, blurStartY, b.w, b.y - blurStartY);
-      ctx.restore();
-      if (isHighQuality && !isMobile) {  // ADD: && !isMobile
+      if (isHighQuality) {
         const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
         const r = Math.max(b.w, b.h) * 1.4;
         const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
