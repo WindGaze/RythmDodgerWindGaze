@@ -673,6 +673,8 @@ const QUALITY_SETTINGS = {
     particleDecay: 0.015,
     screenGlowLayers: 5,
     enableShadows: true,
+    enableMotionBlur: true,
+    enableGlow: true,
     speedBonus: 0
   },
   low: {
@@ -683,11 +685,40 @@ const QUALITY_SETTINGS = {
     particleDecay: 0.03,
     screenGlowLayers: 2,
     enableShadows: false,
+    enableMotionBlur: false,
+    enableGlow: false,
+    speedBonus: 1
+  },
+  mobile: {
+    maxParticles: 15,
+    collisionParticles: 5,
+    dissolveParticles: 8,
+    laserLayers: 1,
+    particleDecay: 0.05,
+    screenGlowLayers: 0,
+    enableShadows: false,
+    enableMotionBlur: false,
+    enableGlow: false,
     speedBonus: 1
   }
 };
 let currentQuality = QUALITY_SETTINGS.high;
-function toggleQuality() {
+
+// Hide quality button on mobile after page loads
+window.addEventListener('DOMContentLoaded', () => {
+  if (isMobile) {
+    const qualityButton = document.getElementById('quality-button');
+    if (qualityButton) {
+      qualityButton.style.display = 'none';
+    }
+  }
+});function toggleQuality() {
+  // Mobile users can't toggle - always use mobile settings
+  if (isMobile) {
+    console.log('Quality toggle disabled on mobile devices');
+    return;
+  }
+  
   isHighQuality = !isHighQuality;
   currentQuality = isHighQuality ? QUALITY_SETTINGS.high : QUALITY_SETTINGS.low;
   const qualityText = document.getElementById('quality-text');
@@ -756,6 +787,9 @@ itemImage.onload = () => {
 
 /* ================= SFX SYSTEM ================= */
 let impactSoundsPlaying = new Set();
+let lastParticleTime = 0;
+let cachedOffset = null;
+let offsetUpdateTimer = 0;
 let sfxLoaded = false;
 sfxAudio.src = 'sfx.mp3';
 sfxAudio.addEventListener('canplaythrough', () => {
@@ -782,6 +816,10 @@ const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/
                  (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
 if (isMobile) {
   mobileControls.classList.add('active');
+  // Force mobile-specific quality settings
+  isHighQuality = false;
+  currentQuality = QUALITY_SETTINGS.mobile;
+  console.log('Mobile detected - using optimized mobile settings');
 }
 /* ================= PROGRESS BAR ================= */
 function updateProgressBar() {
@@ -938,6 +976,11 @@ function triggerScreenGlow(hue) {
   updateScreenGlow();
 }
 function updateScreenGlow() {
+  if (currentQuality.screenGlowLayers === 0) {
+    screenGlow.classList.remove('active');
+    activeGlows = [];
+    return;
+  }
   for (let i = activeGlows.length - 1; i >= 0; i--) {
     activeGlows[i].intensity *= activeGlows[i].decay;
     if (activeGlows[i].intensity < 0.01) {
@@ -1033,6 +1076,14 @@ function updateAndDrawDissolveParticles() {
 }
 function createCollisionParticles(x, y, width, hue) {
   if (particles.length > currentQuality.maxParticles) return;
+  
+  // Throttle particle creation on mobile only
+  if (isMobile) {
+    const now = Date.now();
+    if (now - lastParticleTime < 100) return;
+    lastParticleTime = now;
+  }
+  
   const particleCount = currentQuality.collisionParticles;
   const centerX = x + width / 2;
   for (let i = 0; i < particleCount; i++) {
@@ -1066,11 +1117,13 @@ function updateAndDrawParticles() {
       particles.splice(i, 1);
       continue;
     }
-    ctx.save();
+ctx.save();
     ctx.globalCompositeOperation = "lighter";
     ctx.translate(p.x, p.y);
     ctx.rotate(p.rotation);
-    if (isHighQuality) {
+    
+    // Only draw glow effects if enabled in quality settings
+    if (currentQuality.enableGlow) {
       const glowSize = p.size * 3;
       const glowGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
       glowGrad.addColorStop(0, `hsla(${p.hue}, 100%, 70%, ${p.life * 0.6})`);
@@ -1078,9 +1131,13 @@ function updateAndDrawParticles() {
       glowGrad.addColorStop(1, `hsla(${p.hue}, 100%, 50%, 0)`);
       ctx.fillStyle = glowGrad;
       ctx.fillRect(-glowSize, -glowSize, glowSize * 2, glowSize * 2);
+    }
+    
+    if (currentQuality.enableShadows) {
       ctx.shadowBlur = 15;
       ctx.shadowColor = `hsl(${p.hue}, 100%, 60%)`;
     }
+    
     ctx.fillStyle = `hsl(${p.hue}, 100%, ${60 + p.life * 20}%)`;
     ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
     ctx.restore();
@@ -1130,15 +1187,24 @@ function throwBothSides() {
   throwItem('right');
 }
 function updateAndDrawItems() {
-  // Clear the items overlay canvas
   itemsCtx.clearRect(0, 0, itemsCanvas.width, itemsCanvas.height);
   
-  // Get game canvas position and scale
-  const offset = getGameCanvasOffset();
+  // Cache offset calculation on mobile only (update every second instead of every frame)
+  let offset;
+  if (isMobile) {
+    const now = Date.now();
+    if (!cachedOffset || now - offsetUpdateTimer > 1000) {
+      cachedOffset = getGameCanvasOffset();
+      offsetUpdateTimer = now;
+    }
+    offset = cachedOffset;
+  } else {
+    offset = getGameCanvasOffset();
+  }
   
   for (let i = thrownItems.length - 1; i >= 0; i--) {
     const item = thrownItems[i];
-    if (!item) continue; // Safety check
+    if (!item) continue;
     
     item.vy += item.gravity;
     item.y += item.vy;
@@ -1149,7 +1215,6 @@ function updateAndDrawItems() {
       continue;
     }
     
-    // Convert game canvas coordinates to viewport coordinates
     const screenX = offset.offsetX + (item.x * offset.scaleX);
     const screenY = offset.offsetY + (item.y * offset.scaleY);
     const screenSize = 180 * offset.scaleX;
@@ -2112,25 +2177,30 @@ function update() {
         }
       }
     }
-    if (b.y < PLATFORM_Y + PLATFORM_HEIGHT && !isDeathAnimationPlaying) {
-      const blurLength = isHighQuality ? 50 : 35;
-      const blurStartY = Math.max(40, b.y - blurLength);
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      const blurGrad = ctx.createLinearGradient(b.x + b.w / 2, blurStartY, b.x + b.w / 2, b.y);
-      if (isHighQuality) {
-        blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
-        blurGrad.addColorStop(0.3, `hsla(${b.hue},100%,60%,0.15)`);
-        blurGrad.addColorStop(0.6, `hsla(${b.hue},100%,60%,0.4)`);
-        blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.7)`);
-      } else {
-        blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
-        blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.5)`);
+if (b.y < PLATFORM_Y + PLATFORM_HEIGHT && !isDeathAnimationPlaying) {
+      // Motion blur (only if enabled in quality settings)
+      if (currentQuality.enableMotionBlur) {
+        const blurLength = isHighQuality ? 50 : 35;
+        const blurStartY = Math.max(40, b.y - blurLength);
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        const blurGrad = ctx.createLinearGradient(b.x + b.w / 2, blurStartY, b.x + b.w / 2, b.y);
+        if (isHighQuality) {
+          blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
+          blurGrad.addColorStop(0.3, `hsla(${b.hue},100%,60%,0.15)`);
+          blurGrad.addColorStop(0.6, `hsla(${b.hue},100%,60%,0.4)`);
+          blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.7)`);
+        } else {
+          blurGrad.addColorStop(0, `hsla(${b.hue},100%,60%,0)`);
+          blurGrad.addColorStop(1, `hsla(${b.hue},100%,60%,0.5)`);
+        }
+        ctx.fillStyle = blurGrad;
+        ctx.fillRect(b.x, blurStartY, b.w, b.y - blurStartY);
+        ctx.restore();
       }
-      ctx.fillStyle = blurGrad;
-      ctx.fillRect(b.x, blurStartY, b.w, b.y - blurStartY);
-      ctx.restore();
-      if (isHighQuality) {
+      
+      // Glow effect (only if enabled in quality settings)
+      if (currentQuality.enableGlow) {
         const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
         const r = Math.max(b.w, b.h) * 1.4;
         const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
@@ -2143,14 +2213,21 @@ function update() {
         ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
         ctx.restore();
       }
+      
+      // Shadow (only if enabled in quality settings)
       if (currentQuality.enableShadows) {
         ctx.shadowBlur = 20;
         ctx.shadowColor = `hsl(${b.hue},100%,60%)`;
       }
+      
+      // Main block
       ctx.fillStyle = `hsl(${b.hue},100%,60%)`;
       ctx.fillRect(b.x, b.y, b.w, b.h);
+      
+      // Highlight
       ctx.fillStyle = `hsl(${b.hue},100%,80%)`;
       ctx.fillRect(b.x + b.w * 0.3, b.y + b.h * 0.3, b.w * 0.4, b.h * 0.4);
+      
       ctx.shadowBlur = 0;
     }
     if (gameStarted && !isDeathAnimationPlaying && player.x < b.x + b.w && player.x + player.width > b.x && player.y < b.y + b.h && player.y + player.height > b.y) {
