@@ -690,16 +690,16 @@ const QUALITY_SETTINGS = {
     speedBonus: 1
   },
   mobile: {
-    maxParticles: 15,
-    collisionParticles: 5,
-    dissolveParticles: 8,
+    maxParticles: 3,        // CHANGE from 15 to 3
+    collisionParticles: 2,  // CHANGE from 5 to 2
+    dissolveParticles: 3,   // CHANGE from 8 to 3
     laserLayers: 1,
-    particleDecay: 0.05,
+    particleDecay: 0.2,     // CHANGE from 0.05 to 0.2 (particles die 4x faster)
     screenGlowLayers: 0,
     enableShadows: false,
     enableMotionBlur: false,
     enableGlow: false,
-    speedBonus: 1
+    speedBonus: 1           // CHANGE from 1 to 0
   }
 };
 let currentQuality = QUALITY_SETTINGS.high;
@@ -823,10 +823,14 @@ const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/
                  (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
 if (isMobile) {
   mobileControls.classList.add('active');
-  // Force mobile-specific quality settings
   isHighQuality = false;
   currentQuality = QUALITY_SETTINGS.mobile;
   console.log('Mobile detected - using optimized mobile settings');
+  
+  // ADD THESE LINES:
+  canvas.width = 400;
+  canvas.height = 533;
+  bgVideo.style.display = 'none';  // Disable video
 }
 /* ================= PROGRESS BAR ================= */
 function updateProgressBar() {
@@ -975,6 +979,7 @@ let phase2Warning = false;
 /* ================= SCREEN GLOW SYSTEM ================= */
 let activeGlows = [];
 function triggerScreenGlow(hue) {
+  if (isMobile) return;
   activeGlows.push({
     hue: hue,
     intensity: 1.0,
@@ -2185,8 +2190,7 @@ function update() {
       }
     }
     if (b.y < PLATFORM_Y + PLATFORM_HEIGHT && !isDeathAnimationPlaying) {
-      const blurLength = isHighQuality ? 50 : 35;
-      const blurStartY = Math.max(40, b.y - blurLength);
+      const blurLength = isMobile ? 10 : (isHighQuality ? 50 : 35);  // CHANGE THIS LINE      const blurStartY = Math.max(40, b.y - blurLength);
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       const blurGrad = ctx.createLinearGradient(b.x + b.w / 2, blurStartY, b.x + b.w / 2, b.y);
@@ -2202,7 +2206,7 @@ function update() {
       ctx.fillStyle = blurGrad;
       ctx.fillRect(b.x, blurStartY, b.w, b.y - blurStartY);
       ctx.restore();
-      if (isHighQuality) {
+      if (isHighQuality && !isMobile) {  // ADD: && !isMobile
         const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
         const r = Math.max(b.w, b.h) * 1.4;
         const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
